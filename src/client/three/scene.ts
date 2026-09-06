@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 export class SceneApp {
   renderer: THREE.WebGLRenderer;
@@ -12,6 +16,8 @@ export class SceneApp {
   private focusTarget: THREE.Vector3 | null = null;
   private focusDistance: number | null = null;
   quality: 'high' | 'low';
+  private composer: EffectComposer | null = null;
+  private bloom: UnrealBloomPass | null = null;
 
   constructor(public canvas: HTMLCanvasElement) {
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -78,6 +84,15 @@ export class SceneApp {
     fill.position.set(12, 6, -8);
     this.scene.add(fill);
 
+    // gentle bloom so the jewel, the fireballs and Vul-Kar's eyes glow (desktop only)
+    if (this.quality === 'high') {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.3, 0.97);
+      this.composer.addPass(this.bloom);
+      this.composer.addPass(new OutputPass());
+    }
+
     window.addEventListener('resize', () => this.resize());
     this.resize();
   }
@@ -88,6 +103,10 @@ export class SceneApp {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
   }
 
   onFrame(cb: (dt: number, t: number) => void) {
@@ -114,7 +133,8 @@ export class SceneApp {
       }
       for (const cb of this.frameCbs) cb(dt, t);
       this.controls.update();
-      this.renderer.render(this.scene, this.camera);
+      if (this.composer) this.composer.render();
+      else this.renderer.render(this.scene, this.camera);
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);

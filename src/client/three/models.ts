@@ -5,7 +5,7 @@ const black = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35,
 
 export function makePiece(color: string): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.55, metalness: 0.05 });
+  const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color), roughness: 0.38, metalness: 0.02, clearcoat: 0.55, clearcoatRoughness: 0.35 });
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.36), mat);
   base.position.y = 0.03;
   g.add(base);

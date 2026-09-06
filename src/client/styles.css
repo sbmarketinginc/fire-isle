@@ -55,7 +55,8 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 .hand { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; }
 .hand::-webkit-scrollbar { display: none; }
 .card { flex: 0 0 auto; width: 118px; min-height: 92px; border-radius: 10px; padding: 8px; background: linear-gradient(160deg, #fff4dc, #f1c98a); color: #3a1a0a; border: 2px solid #b8341c; box-shadow: 0 3px 8px rgba(0,0,0,0.4); font-size: 11px; font-weight: 700; line-height: 1.2; display: flex; flex-direction: column; justify-content: space-between; text-align: center; cursor: pointer; transition: transform 0.15s; }
-.card .art { height: 30px; border-radius: 6px; background: linear-gradient(135deg, #e8412a, #ff9a1f 60%, #ffe66d); margin-bottom: 6px; opacity: 0.85; }
+.card .art { height: 34px; border-radius: 6px; background: linear-gradient(135deg, #f7d9a8, #ffe9c4); margin-bottom: 6px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(120,60,20,0.35); }
+.card .art svg { height: 30px; width: 46px; }
 .card.playable { border-color: #ffe66d; box-shadow: 0 0 0 3px rgba(255,230,109,0.5), 0 3px 8px rgba(0,0,0,0.4); }
 .card.playable:active { transform: translateY(-4px); }
 .card.dim { opacity: 0.55; cursor: default; }
@@ -94,7 +95,8 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 .dieface { display: inline-block; min-width: 34px; padding: 4px 8px; border-radius: 8px; background: #fff; color: #111; font-weight: 800; text-align: center; }
 @media (max-width: 480px) {
   .card { width: 88px; min-height: 80px; font-size: 9.5px; padding: 6px; }
-  .card .art { height: 22px; }
+  .card .art { height: 26px; }
+  .card .art svg { height: 22px; width: 34px; }
   .chip { font-size: 11px; padding: 3px 7px 3px 5px; }
   .chip .loc { max-width: 72px; }
   .iconbtn { padding: 6px 7px; font-size: 13px; }
@@ -110,7 +112,8 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
   .status { font-size: 12px; padding: 6px 10px; }
   .actions button { padding: 7px 10px; font-size: 13px; min-width: 90px; }
   .card { width: 92px; min-height: 64px; font-size: 9px; padding: 5px; }
-  .card .art { height: 14px; margin-bottom: 3px; }
+  .card .art { height: 18px; margin-bottom: 3px; }
+  .card .art svg { height: 16px; width: 26px; }
   .topbar { padding-top: calc(4px + var(--safe-top)); padding-bottom: 4px; }
   .log { max-height: 60vh; top: calc(48px + var(--safe-top)); }
 }

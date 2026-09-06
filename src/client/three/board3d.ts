@@ -9,6 +9,8 @@ import {
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
 import { makeWater } from './water.ts';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { ADJ, SPACES } from '../../engine/board.ts';
 import { BOARD_H, BOARD_W } from '../../engine/board.ts';
 import type { SceneApp } from './scene.ts';
 import { duckMusic, sfx } from '../audio.ts';
@@ -57,6 +59,7 @@ export class Board3D {
   highlights: THREE.Mesh[] = [];
   labelMesh: THREE.Mesh;
   private trail: THREE.Mesh[] = [];
+  private embers: { points: THREE.Points; update: (dt: number) => void } | null = null;
   private view: GameView | null = null;
   private animating = false;
   private t = 0;
@@ -87,6 +90,14 @@ export class Board3D {
 
     // palm trees in the jungle, away from the trails
     this.group.add(makePalms(this.palmSpots()));
+
+    // raised trail stones standing proud of the terrain
+    this.group.add(this.makeStones());
+
+    // embers drifting up from Vul-Kar's crater
+    this.embers = this.makeEmbers();
+    this.group.add(this.embers.points);
+    app.onFrame((dt) => this.embers?.update(dt));
 
     // labels overlay (toggle)
     const lgeo = createTerrainGeometry(120, 87);
@@ -151,6 +162,95 @@ export class Board3D {
     this.setupPicking();
   }
 
+  /** One instanced mesh of rounded stones, one per trail space, tinted per space type. */
+  private makeStones(): THREE.InstancedMesh {
+    const stones = SPACES.filter((sp) => !sp.bridge && sp.special !== 'water' && sp.special !== 'start' && sp.special !== 'vulkar' && sp.special !== 'dock');
+    const geo = new RoundedBoxGeometry(0.5, 0.09, 0.36, 3, 0.05);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.0 });
+    const mesh = new THREE.InstancedMesh(geo, mat, stones.length);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const light = new THREE.Color(0x8c9aa6);
+    const dark = new THREE.Color(0x2a343e);
+    const beach = new THREE.Color(0xb3bbc0);
+    const chip = new THREE.Color(0xa6b2bc);
+    stones.forEach((sp, i) => {
+      const nb = ADJ[sp.id].map((id) => SPACE[id]).filter((n) => !n.bridge);
+      let ang = 0;
+      if (nb.length >= 2) ang = Math.atan2(nb[1].y - nb[0].y, nb[1].x - nb[0].x);
+      else if (nb.length === 1) ang = Math.atan2(nb[0].y - sp.y, nb[0].x - sp.x);
+      const p = surfacePoint(sp.x, sp.y, 0.03);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -ang);
+      const sc = sp.special === 'beach' ? 1.35 : sp.special === 'witchlordStep' ? 1.15 : 1;
+      m.compose(p, q, new THREE.Vector3(sc, 1, sc));
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, sp.dark ? dark : sp.special === 'beach' ? beach : sp.rockChip ? chip : light);
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /** Glowing embers rising from the idol's mouth and crater. */
+  private makeEmbers(): { points: THREE.Points; update: (dt: number) => void } {
+    const N = this.app.quality === 'high' ? 90 : 45;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const age = new Float32Array(N);
+    const life = new Float32Array(N);
+    const vel = new Float32Array(N * 3);
+    const origin = this.idol.position.clone().add(new THREE.Vector3(0, 0.55, -0.3));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d')!;
+    const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.3, 'rgba(255,200,120,0.8)');
+    g.addColorStop(1, 'rgba(255,80,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.PointsMaterial({ size: 0.22, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    const reset = (i: number) => {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.25;
+      pos[i * 3] = origin.x + Math.cos(a) * r;
+      pos[i * 3 + 1] = origin.y;
+      pos[i * 3 + 2] = origin.z + Math.sin(a) * r;
+      vel[i * 3] = (Math.random() - 0.5) * 0.25;
+      vel[i * 3 + 1] = 0.45 + Math.random() * 0.5;
+      vel[i * 3 + 2] = (Math.random() - 0.5) * 0.25 - 0.15;
+      age[i] = 0;
+      life[i] = 1.8 + Math.random() * 1.6;
+    };
+    for (let i = 0; i < N; i++) {
+      reset(i);
+      age[i] = Math.random() * life[i];
+    }
+    const update = (dt: number) => {
+      for (let i = 0; i < N; i++) {
+        age[i] += dt;
+        if (age[i] > life[i]) reset(i);
+        const k = age[i] / life[i];
+        pos[i * 3] += (vel[i * 3] + Math.sin(age[i] * 3 + i) * 0.12) * dt;
+        pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
+        pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+        const glow = 1 - k;
+        col[i * 3] = glow;
+        col[i * 3 + 1] = glow * (0.45 - k * 0.3);
+        col[i * 3 + 2] = glow * 0.08;
+      }
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.color.needsUpdate = true;
+    };
+    return { points, update };
+  }
+
   /** Deterministic palm positions on jungle ground clear of every trail and feature. */
   private palmSpots(): { x: number; y: number; z: number; scale: number; lean: number }[] {
     const out: { x: number; y: number; z: number; scale: number; lean: number }[] = [];
@@ -208,7 +308,8 @@ export class Board3D {
       p.y = Math.max(a.y, c.y) + 0.12 + 0.03 + lift;
       return p;
     }
-    return surfacePoint(s.x, s.y, lift);
+    const onStone = s.special !== 'water' && s.special !== 'start' && s.special !== 'vulkar' && s.special !== 'dock';
+    return surfacePoint(s.x, s.y, lift + (onStone ? 0.085 : 0));
   }
 
   private locationPoint(view: GameView, pid: PlayerId): { pos: THREE.Vector3; lying: boolean; sunk: boolean } {
