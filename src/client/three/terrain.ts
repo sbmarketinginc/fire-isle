@@ -245,7 +245,7 @@ export function heightAt(x: number, y: number): number {
   return sampleRaw(x, y);
 }
 
-function shoreDistance(x: number, y: number): number {
+export function shoreDistance(x: number, y: number): number {
   if (!shoreField) buildField();
   const i = Math.max(0, Math.min(FIELD_W - 1, Math.round((x / BOARD_W) * FIELD_W - 0.5)));
   const j = Math.max(0, Math.min(FIELD_H - 1, Math.round((y / BOARD_H) * FIELD_H - 0.5)));
@@ -256,6 +256,81 @@ function shoreDistance(x: number, y: number): number {
 export function surfacePoint(x: number, y: number, lift = 0): THREE.Vector3 {
   const [wx, wz] = toWorld(x, y);
   return new THREE.Vector3(wx, Math.max(heightAt(x, y), 0) + lift, wz);
+}
+
+/** Small canvas whose red channel is 1 on land and fades to 0 out at sea (used by the water shader). */
+export function shoreMaskCanvas(w = 256): HTMLCanvasElement {
+  const h = Math.round((w * BOARD_H) / BOARD_W);
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const x = ((i + 0.5) / w) * BOARD_W;
+      const y = ((j + 0.5) / h) * BOARD_H;
+      const d = shoreDistance(x, y); // positive inland
+      const v = THREE.MathUtils.smoothstep(d, -70, 8);
+      const k = (j * w + i) * 4;
+      img.data[k] = img.data[k + 1] = img.data[k + 2] = Math.round(v * 255);
+      img.data[k + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+/**
+ * Normal map derived from the height field plus fine detail: rock striations on the massif,
+ * ripples on the sand, and the grooves of the trails. Gives the flat-shaded terrain real relief.
+ */
+export function paintNormalMap(w = 1024): HTMLCanvasElement {
+  const h = Math.round((w * BOARD_H) / BOARD_W);
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const sx = BOARD_W / w;
+  const sy = BOARD_H / h;
+  // detailed height with micro relief, sampled on the output grid
+  const H = new Float32Array((w + 2) * (h + 2));
+  for (let j = -1; j <= h; j++) {
+    for (let i = -1; i <= w; i++) {
+      const x = (i + 0.5) * sx;
+      const y = (j + 0.5) * sy;
+      let hh = heightAt(x, y);
+      const d = shoreDistance(x, y);
+      if (d > 0) {
+        const rock = THREE.MathUtils.smoothstep(hh, 1.3, 2.4);
+        const sand = 1 - THREE.MathUtils.smoothstep(hh, 0.3, 0.7);
+        // striated rock, rippled sand, soft jungle lumps
+        hh += rock * (fbm(x * 0.09, y * 0.31, 3) - 0.5) * 0.09 + rock * (fbm(x * 0.35, y * 0.35, 2) - 0.5) * 0.05;
+        hh += sand * Math.sin(x * 0.45 + fbm(x * 0.05, y * 0.05, 2) * 6) * 0.012;
+        hh += (1 - rock) * (1 - sand) * (fbm(x * 0.2, y * 0.2, 3) - 0.5) * 0.06;
+      }
+      H[(j + 1) * (w + 2) + (i + 1)] = hh;
+    }
+  }
+  const strength = 3.2;
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const idx = (j + 1) * (w + 2) + (i + 1);
+      const dx = (H[idx + 1] - H[idx - 1]) / (2 * sx) / BOARD_SCALE;
+      const dy = (H[idx + w + 2] - H[idx - w - 2]) / (2 * sy) / BOARD_SCALE;
+      const nx = -dx * strength * BOARD_SCALE * 40;
+      const ny = -dy * strength * BOARD_SCALE * 40;
+      const len = Math.hypot(nx, ny, 1);
+      const k = (j * w + i) * 4;
+      img.data[k] = Math.round((nx / len * 0.5 + 0.5) * 255);
+      img.data[k + 1] = Math.round((-ny / len * 0.5 + 0.5) * 255);
+      img.data[k + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
+      img.data[k + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +419,14 @@ export function paintBoardTexture(scale = 2): HTMLCanvasElement {
         // the summit keeps a darker, volcanic tone
         rock = lerpColor(rock, C.rockDark, THREE.MathUtils.smoothstep(h, 2.6, 3.9) * 0.55);
         col = lerpColor(col, rock, THREE.MathUtils.clamp(rockT, 0, 1));
+        // wet, darker sand right at the waterline; dry pale sand a little higher up
+        const wet = 1 - THREE.MathUtils.smoothstep(d, 0, 14);
+        col = lerpColor(col, [178, 150, 96], wet * 0.55 * (1 - sandT));
+        // grass speckle and rock striations
+        const speck = fbm(x * 0.5, y * 0.5, 2);
+        col = lerpColor(col, C.jungleLight, (speck > 0.62 ? 0.25 : 0) * sandT * (1 - THREE.MathUtils.smoothstep(h, 1.3, 2.0)));
+        const stria = fbm(x * 0.09, y * 0.31, 3);
+        col = lerpColor(col, C.rockDark, (stria > 0.58 ? 0.22 : 0) * THREE.MathUtils.smoothstep(h, 1.4, 2.4));
         // orange cliffs on the west coast and along the south-west shore
         const cliffT = (x < 250 && y > 380 ? 1 : 0) * THREE.MathUtils.smoothstep(h, 0.45, 1.2) + (y > 600 && x < 420 ? 0.6 : 0) * THREE.MathUtils.smoothstep(h, 0.4, 1.0);
         col = lerpColor(col, lerpColor(C.cliff, C.cliffDark, n2), THREE.MathUtils.clamp(cliffT, 0, 1) * 0.9);

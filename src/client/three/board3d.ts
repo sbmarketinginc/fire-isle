@@ -5,12 +5,41 @@ import {
 } from './boardRefs.ts';
 import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
-  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makePiece, makeToken,
+  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makePalms, makePiece, makeToken, makeTrail,
 } from './models.ts';
-import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, surfacePoint } from './terrain.ts';
+import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
+import { makeWater } from './water.ts';
 import { BOARD_H, BOARD_W } from '../../engine/board.ts';
 import type { SceneApp } from './scene.ts';
 import { duckMusic, sfx } from '../audio.ts';
+
+/** Dark polished wood with a soft vignette for the tabletop the board sits on. */
+function woodTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 1024;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(1024, 1024);
+  for (let j = 0; j < 1024; j++) {
+    for (let i = 0; i < 1024; i++) {
+      const grain = Math.sin(i * 0.11 + Math.sin(j * 0.013) * 6 + Math.sin(i * 0.031 + j * 0.017) * 2.5) * 0.5 + 0.5;
+      const fine = Math.sin(i * 0.9 + j * 0.05) * 0.5 + 0.5;
+      const dx = i / 1024 - 0.5;
+      const dy = j / 1024 - 0.5;
+      const vignette = 1 - Math.min(1, Math.hypot(dx, dy) * 1.9) * 0.75;
+      const base = 0.55 + grain * 0.3 + fine * 0.08;
+      const k = (j * 1024 + i) * 4;
+      img.data[k] = Math.round(72 * base * vignette);
+      img.data[k + 1] = Math.round(44 * base * vignette);
+      img.data[k + 2] = Math.round(30 * base * vignette);
+      img.data[k + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
 
 const FACING_ROT: Record<string, number> = { S: Math.PI, SW: (3 * Math.PI) / 4, E: -Math.PI / 2, W: Math.PI / 2, NE: -Math.PI / 4 };
 
@@ -27,6 +56,7 @@ export class Board3D {
   die = makeDie();
   highlights: THREE.Mesh[] = [];
   labelMesh: THREE.Mesh;
+  private trail: THREE.Mesh[] = [];
   private view: GameView | null = null;
   private animating = false;
   private t = 0;
@@ -36,14 +66,27 @@ export class Board3D {
   private choiceMap = new Map<THREE.Mesh, string[][]>();
 
   constructor(private app: SceneApp) {
-    const terrain = new THREE.Mesh(createTerrainGeometry(app.quality === 'high' ? 240 : 160, app.quality === 'high' ? 174 : 116), new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0.02 }));
+    const terrainMat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.02 });
+    const terrain = new THREE.Mesh(createTerrainGeometry(app.quality === 'high' ? 240 : 160, app.quality === 'high' ? 174 : 116), terrainMat);
     const tex = new THREE.CanvasTexture(paintBoardTexture(app.quality === 'high' ? 2 : 1.5));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = Math.min(8, app.renderer.capabilities.getMaxAnisotropy());
-    (terrain.material as THREE.MeshStandardMaterial).map = tex;
+    terrainMat.map = tex;
+    const nrm = new THREE.CanvasTexture(paintNormalMap(app.quality === 'high' ? 1024 : 512));
+    nrm.colorSpace = THREE.NoColorSpace;
+    terrainMat.normalMap = nrm;
+    terrainMat.normalScale.set(0.85, 0.85);
     terrain.receiveShadow = true;
     terrain.castShadow = false;
     this.group.add(terrain);
+
+    // the sea
+    const water = makeWater(app.quality);
+    this.group.add(water.mesh);
+    app.onFrame((_dt, t) => water.update(t, app.camera));
+
+    // palm trees in the jungle, away from the trails
+    this.group.add(makePalms(this.palmSpots()));
 
     // labels overlay (toggle)
     const lgeo = createTerrainGeometry(120, 87);
@@ -59,7 +102,7 @@ export class Board3D {
     tray.position.y = -0.3;
     tray.receiveShadow = true;
     this.group.add(tray);
-    const table = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshStandardMaterial({ color: 0x2b1a12, roughness: 0.95 }));
+    const table = new THREE.Mesh(new THREE.CircleGeometry(48, 64), new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.62, metalness: 0.05 }));
     table.rotation.x = -Math.PI / 2;
     table.position.y = -0.56;
     table.receiveShadow = true;
@@ -69,7 +112,7 @@ export class Board3D {
     const vk = surfacePoint(SPACE.VKP.x, SPACE.VKP.y - 30);
     this.idol.position.copy(vk);
     this.idol.rotation.y = this.idolTargetRot;
-    this.idol.scale.setScalar(0.62);
+    this.idol.scale.setScalar(0.5);
     this.group.add(this.idol);
 
     // bridges
@@ -106,6 +149,37 @@ export class Board3D {
     app.scene.add(this.group);
     app.onFrame((dt, t) => this.frame(dt, t));
     this.setupPicking();
+  }
+
+  /** Deterministic palm positions on jungle ground clear of every trail and feature. */
+  private palmSpots(): { x: number; y: number; z: number; scale: number; lean: number }[] {
+    const out: { x: number; y: number; z: number; scale: number; lean: number }[] = [];
+    const hash = (a: number, b: number) => {
+      const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const keepOut: { x: number; y: number; r: number }[] = [
+      { x: SPACE.VKP.x, y: SPACE.VKP.y, r: 150 }, { x: SPACE.DMP.x, y: SPACE.DMP.y, r: 55 }, { x: RUIN.x, y: RUIN.y, r: 45 },
+      ...Object.values(CAVE).map((c) => ({ x: c.x, y: c.y, r: 34 })), ...Object.values(PIT).map((p) => ({ x: p.x, y: p.y, r: 34 })),
+      ...FIREBALLS.map((f) => ({ x: f.x, y: f.y, r: 30 })),
+    ];
+    for (let gy = 40; gy < 720 && out.length < 48; gy += 26) {
+      for (let gx = 60; gx < 980 && out.length < 48; gx += 26) {
+        const x = gx + (hash(gx, gy) - 0.5) * 22;
+        const y = gy + (hash(gy, gx) - 0.5) * 22;
+        if (shoreDistance(x, y) < 22) continue;
+        const h = heightAt(x, y);
+        if (h < 0.5 || h > 1.55) continue;
+        if (keepOut.some((k) => Math.hypot(k.x - x, k.y - y) < k.r)) continue;
+        let near = Infinity;
+        for (const sp of Object.values(SPACE)) near = Math.min(near, Math.hypot(sp.x - x, sp.y - y));
+        if (near < 27) continue;
+        if (hash(x, y) < 0.45) continue; // thin the grid out
+        const p = surfacePoint(x, y, -0.02);
+        out.push({ x: p.x, y: p.y, z: p.z, scale: 0.55 + hash(y, x) * 0.4, lean: hash(x + 1, y + 1) * Math.PI * 2 });
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -514,6 +588,17 @@ export class Board3D {
     this.app.focusOn(curve.getPoint(0.5), Math.max(9, len * 0.9));
     duckMusic(ms + 800);
     sfx.fireball();
+    // heat: a travelling light and a fading trail behind the marble
+    const glow = new THREE.PointLight(0xff6a1a, 3.2, 5.5, 1.6);
+    ball.add(glow);
+    const mat = ball.material as THREE.MeshStandardMaterial;
+    const baseEmissive = mat.emissiveIntensity;
+    mat.emissiveIntensity = 1.6;
+    if (!this.trail.length) {
+      this.trail = makeTrail(12);
+      for (const t of this.trail) this.group.add(t);
+    }
+    const history: THREE.Vector3[] = [];
     const start = performance.now();
     const knocked = new Set<PlayerId>();
     await new Promise<void>((resolve) => {
@@ -522,6 +607,13 @@ export class Board3D {
         const p = curve.getPoint(k);
         ball.position.copy(p);
         ball.rotation.x += 0.35;
+        history.unshift(p.clone());
+        if (history.length > this.trail.length * 3) history.pop();
+        this.trail.forEach((t, i) => {
+          const h = history[i * 3];
+          t.visible = !!h;
+          if (h) t.position.copy(h);
+        });
         // knock over any piece the ball passes
         if (this.view) {
           for (const pl of this.view.players) {
@@ -538,6 +630,9 @@ export class Board3D {
       };
       step();
     });
+    ball.remove(glow);
+    mat.emissiveIntensity = baseEmissive;
+    for (const t of this.trail) t.visible = false;
     await sleep(fast ? 100 : 500);
     ball.visible = route.fireball !== 'V';
     ball.position.copy(home);

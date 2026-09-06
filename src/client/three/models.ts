@@ -51,52 +51,146 @@ export function makePiece(color: string): THREE.Group {
 /** Vul-Kar: the fireball-breathing idol. The mouth opens toward -Z of the group. */
 export function makeIdol(): THREE.Group {
   const g = new THREE.Group();
-  const idolMat = new THREE.MeshStandardMaterial({ color: 0x121214, roughness: 0.3, metalness: 0.35 });
-  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 1.7, 9), idolMat);
-  head.position.y = 0.85;
+  const stone = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.28, metalness: 0.42 });
+  const rock = new THREE.MeshStandardMaterial({ color: 0x2b2438, roughness: 0.92 });
+  // carved pedestal
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 1.12, 0.36, 14), rock);
+  base.position.y = 0.18;
+  g.add(base);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.05, 8, 28), rock);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.36;
+  g.add(ring);
+  // head: lathe silhouette, wide jaw, domed crown
+  const profile = [
+    [0.0, 0.36], [0.58, 0.36], [0.74, 0.55], [0.8, 0.95], [0.77, 1.35], [0.7, 1.72], [0.6, 1.98], [0.45, 2.16], [0.22, 2.26], [0.0, 2.28],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  const head = new THREE.Mesh(new THREE.LatheGeometry(profile, 28), stone);
   g.add(head);
-  const brow = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.28, 0.7), idolMat);
-  brow.position.set(0, 1.35, -0.25);
-  brow.rotation.x = -0.15;
+  // heavy brow arching over the eyes
+  const brow = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.14, 10, 22, Math.PI), stone);
+  brow.position.set(0, 1.52, -0.58);
+  brow.rotation.x = Math.PI / 2 - 0.35;
   g.add(brow);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.75, 0.55), idolMat);
-  snout.position.set(0, 0.62, -0.5);
-  g.add(snout);
-  // mouth cavity
-  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x3a0606, roughness: 0.8, emissive: 0x2a0000 });
-  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.5, 0.5), mouthMat);
-  mouth.position.set(0, 0.6, -0.62);
+  // cheeks and nose ridge
+  for (const sx of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 12), stone);
+    cheek.position.set(sx * 0.5, 0.98, -0.42);
+    cheek.scale.set(1, 0.8, 0.8);
+    g.add(cheek);
+  }
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.32), stone);
+  nose.position.set(0, 1.12, -0.72);
+  nose.rotation.x = -0.35;
+  g.add(nose);
+  // eyes: glowing embers set deep under the brow
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xff7a00, emissiveIntensity: 1.6 });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x1a0500, roughness: 0.6 });
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), eyeMat);
+    e.position.set(sx * 0.27, 1.34, -0.64);
+    g.add(e);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), pupilMat);
+    pupil.position.set(sx * 0.27, 1.34, -0.73);
+    g.add(pupil);
+  }
+  // mouth: a dark, ember-lit cavity with fangs
+  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x3a0606, roughness: 0.85, emissive: 0x6a1200, emissiveIntensity: 0.8 });
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.5, 0.55), mouthMat);
+  mouth.position.set(0, 0.72, -0.62);
   g.add(mouth);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.07, 8, 20, Math.PI), stone);
+  lip.position.set(0, 0.5, -0.86);
+  lip.rotation.z = Math.PI;
+  g.add(lip);
   const toothMat = new THREE.MeshStandardMaterial({ color: 0xf1ead6, roughness: 0.4 });
-  for (let i = 0; i < 4; i++) {
-    const t = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 6), toothMat);
-    t.position.set(-0.27 + i * 0.18, 0.78, -0.86);
+  for (let i = 0; i < 5; i++) {
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.2, 6), toothMat);
+    t.position.set(-0.3 + i * 0.15, 0.9, -0.88);
     t.rotation.x = Math.PI;
     g.add(t);
-    const b = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 6), toothMat);
-    b.position.set(-0.2 + i * 0.13, 0.42, -0.86);
+  }
+  for (let i = 0; i < 4; i++) {
+    const b = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 6), toothMat);
+    b.position.set(-0.22 + i * 0.147, 0.54, -0.88);
     g.add(b);
   }
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xff8c00, emissiveIntensity: 0.9 });
+  // curved horns built from tapering segments along an arc
   for (const sx of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), eyeMat);
-    e.position.set(sx * 0.27, 1.18, -0.6);
-    g.add(e);
+    const from = new THREE.Vector3(sx * 0.42, 2.05, 0.02);
+    const ctrl = new THREE.Vector3(sx * 0.95, 2.55, -0.1);
+    const to = new THREE.Vector3(sx * 0.95, 3.15, -0.45);
+    const curve = new THREE.QuadraticBezierCurve3(from, ctrl, to);
+    const segs = 7;
+    for (let i = 0; i < segs; i++) {
+      const a = curve.getPoint(i / segs);
+      const b = curve.getPoint((i + 1) / segs);
+      const r0 = 0.17 * (1 - i / segs) + 0.03;
+      const r1 = 0.17 * (1 - (i + 1) / segs) + 0.03;
+      const len = a.distanceTo(b) * 1.15;
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), stone);
+      seg.position.copy(a).lerp(b, 0.5);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      g.add(seg);
+    }
   }
-  for (const sx of [-1, 1]) {
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.85, 8), idolMat);
-    horn.position.set(sx * 0.42, 1.95, -0.05);
-    horn.rotation.z = -sx * 0.45;
-    horn.rotation.x = -0.15;
-    g.add(horn);
-  }
-  const chin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.22, 0.5), idolMat);
-  chin.position.set(0, 0.18, -0.5);
-  g.add(chin);
   g.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) o.castShadow = true;
   });
   return g;
+}
+
+/** A clump of palm trees as two instanced meshes (trunks and fronds). */
+export function makePalms(spots: { x: number; y: number; z: number; scale: number; lean: number }[]): THREE.Group {
+  const g = new THREE.Group();
+  if (!spots.length) return g;
+  const trunkGeo = new THREE.CylinderGeometry(0.04, 0.075, 1, 7);
+  trunkGeo.translate(0, 0.5, 0);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.9 });
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, spots.length);
+  const leaf = new THREE.Shape();
+  leaf.moveTo(0, 0);
+  leaf.quadraticCurveTo(0.2, 0.35, 0.03, 0.95);
+  leaf.quadraticCurveTo(-0.2, 0.35, 0, 0);
+  const frondGeo = new THREE.ShapeGeometry(leaf, 8);
+  frondGeo.rotateX(-Math.PI / 2 + 0.75); // droop outward and down
+  const frondMat = new THREE.MeshStandardMaterial({ color: 0x3f8a3a, roughness: 0.65, side: THREE.DoubleSide });
+  const FRONDS = 9;
+  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, spots.length * FRONDS);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  spots.forEach((sp, i) => {
+    const lean = new THREE.Vector3(Math.cos(sp.lean) * 0.18, 1, Math.sin(sp.lean) * 0.18).normalize();
+    q.setFromUnitVectors(up, lean);
+    m.compose(new THREE.Vector3(sp.x, sp.y, sp.z), q, new THREE.Vector3(sp.scale, sp.scale, sp.scale));
+    trunks.setMatrixAt(i, m);
+    const top = new THREE.Vector3(sp.x, sp.y, sp.z).add(lean.clone().multiplyScalar(sp.scale));
+    for (let f = 0; f < FRONDS; f++) {
+      const a = (f / FRONDS) * Math.PI * 2 + sp.lean;
+      const rot = new THREE.Quaternion().setFromAxisAngle(up, a);
+      m.compose(top, rot, new THREE.Vector3(sp.scale * 0.9, sp.scale * 0.9, sp.scale * 0.9));
+      fronds.setMatrixAt(i * FRONDS + f, m);
+    }
+  });
+  trunks.castShadow = true;
+  fronds.castShadow = true;
+  g.add(trunks, fronds);
+  return g;
+}
+
+/** Pool of small glowing spheres used as a fireball's trail. */
+export function makeTrail(n = 10): THREE.Mesh[] {
+  const out: THREE.Mesh[] = [];
+  for (let i = 0; i < n; i++) {
+    const k = 1 - i / n;
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0.07 - i * 0.004, 1, 0.55), transparent: true, opacity: 0.55 * k, depthWrite: false });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.16 * k + 0.03, 10, 8), mat);
+    m.visible = false;
+    m.renderOrder = 6;
+    out.push(m);
+  }
+  return out;
 }
 
 export function makeJewel(): THREE.Mesh {

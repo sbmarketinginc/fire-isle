@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 export class SceneApp {
   renderer: THREE.WebGLRenderer;
@@ -22,8 +23,29 @@ export class SceneApp {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = this.quality === 'high';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.scene.background = new THREE.Color(0x0d0620);
-    this.scene.fog = new THREE.Fog(0x0d0620, 40, 90);
+    this.scene.background = new THREE.Color(0x2a1a4a);
+    this.scene.fog = new THREE.Fog(0x3a2560, 48, 115);
+    // soft image-based lighting so the glossy jewel, marbles and idol pick up reflections
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
+    // twilight sky dome: a vertex-coloured gradient so tone mapping and colour management apply
+    const skyGeo = new THREE.SphereGeometry(115, 32, 20);
+    const colors = new Float32Array(skyGeo.attributes.position.count * 3);
+    const top = new THREE.Color(0x1b1240);
+    const horizon = new THREE.Color(0x6a3f9a);
+    const below = new THREE.Color(0x2a1a4a);
+    const tmp = new THREE.Color();
+    for (let i = 0; i < skyGeo.attributes.position.count; i++) {
+      const y = skyGeo.attributes.position.getY(i) / 115;
+      if (y >= 0) tmp.copy(horizon).lerp(top, Math.pow(Math.min(1, y * 1.6), 0.8));
+      else tmp.copy(horizon).lerp(below, Math.min(1, -y * 3));
+      colors.set([tmp.r, tmp.g, tmp.b], i * 3);
+    }
+    skyGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const sky = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    this.scene.add(sky);
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 200);
     this.camera.position.set(0, 16, 17);
