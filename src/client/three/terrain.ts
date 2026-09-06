@@ -4,7 +4,7 @@
 // Great Sway Bluff falling to the water in the west, sand beaches all round.
 import * as THREE from 'three';
 import {
-  BOARD_H, BOARD_W, CAVES, FIREBALLS, PITS, RUIN, SPACE, SPACES, ADJ,
+  BOARD_H, BOARD_W, CAVES, FIREBALLS, PITS, ROUTES, RUIN, SPACE, SPACES, ADJ,
 } from '../../engine/board.ts';
 
 export const BOARD_SCALE = 0.02; // world units per board pixel
@@ -19,11 +19,12 @@ export function toWorld(x: number, y: number): [number, number] {
 // Shoreline and relief
 // ---------------------------------------------------------------------------
 
+// Traced from the sand edge of the photographed board (the plastic tray's sea starts outside it).
 const SHORE: [number, number][] = [
-  [205, 48], [330, 34], [450, 56], [560, 42], [660, 46], [760, 30], [860, 44], [940, 84], [988, 150],
-  [992, 260], [978, 360], [992, 470], [962, 585], [900, 645], [800, 690], [700, 702], [600, 690],
-  [500, 704], [400, 690], [300, 700], [200, 652], [112, 604], [70, 522], [56, 420], [78, 342],
-  [62, 262], [82, 172], [132, 92],
+  [205, 48], [330, 34], [450, 56], [560, 42], [660, 46], [760, 30], [860, 44], [925, 88], [950, 150],
+  [946, 260], [950, 360], [956, 470], [936, 585], [890, 640], [800, 678], [700, 690], [600, 680],
+  [500, 690], [400, 680], [300, 690], [205, 645], [150, 600], [125, 520], [118, 420], [125, 340],
+  [130, 262], [135, 172], [165, 92],
 ];
 
 function pointInPoly(x: number, y: number, poly: [number, number][]): boolean {
@@ -61,7 +62,6 @@ const BUMPS: Bump[] = [
   { x: 470, y: 380, sx: 60, sy: 60, h: 0.9 },
   // Chasm Peak and the islet of cave 4
   { x: 355, y: 275, sx: 42, sy: 55, h: 3.1 },
-  { x: 480, y: 268, sx: 28, sy: 24, h: 1.3 },
   // Great Sway Bluff
   { x: 175, y: 250, sx: 55, sy: 48, h: 2.3 },
   // northern ridge carrying the Low Road / High Road
@@ -87,8 +87,10 @@ const BUMPS: Bump[] = [
 ];
 const DIPS: Bump[] = [
   { x: 640, y: 472, sx: 30, sy: 26, h: 1.6 }, // crater hole
-  { x: 430, y: 300, sx: 55, sy: 40, h: 1.2, rot: -0.5 }, // white-water gorge
-  { x: 395, y: 245, sx: 40, sy: 28, h: 0.9, rot: -0.7 },
+  { x: 440, y: 300, sx: 62, sy: 42, h: 3.0, rot: -0.5 }, // white-water gorge below Chasm Peak
+  { x: 395, y: 240, sx: 45, sy: 30, h: 2.2, rot: -0.7 },
+  { x: 500, y: 330, sx: 34, sy: 26, h: 1.4, rot: -0.4 },
+  { x: 478, y: 272, sx: 42, sy: 32, h: 1.5 }, // the chasm around cave 4's islet
 ];
 
 function gauss(b: Bump, x: number, y: number): number {
@@ -243,7 +245,7 @@ export function heightAt(x: number, y: number): number {
   return sampleRaw(x, y);
 }
 
-export function shoreDistance(x: number, y: number): number {
+function shoreDistance(x: number, y: number): number {
   if (!shoreField) buildField();
   const i = Math.max(0, Math.min(FIELD_W - 1, Math.round((x / BOARD_W) * FIELD_W - 0.5)));
   const j = Math.max(0, Math.min(FIELD_H - 1, Math.round((y / BOARD_H) * FIELD_H - 0.5)));
@@ -443,8 +445,7 @@ function drawFeatures(ctx: CanvasRenderingContext2D, s: number) {
     ctx.translate(sp.x, sp.y);
     ctx.rotate(ang);
     roundedRect(ctx, -w / 2, -h / 2, w, h, 6);
-    ctx.fillStyle = sp.dark ? '#33404c' : sp.safe && sp.trail !== 'GG' && sp.trail !== 'GSB' && sp.trail !== 'CP' && sp.trail !== 'C6' && sp.trail !== 'HR' ? '#aeb9c4' : '#9fb0bd';
-    if (sp.special === 'beach') ctx.fillStyle = '#c9d0d3';
+    ctx.fillStyle = sp.dark ? '#33404c' : sp.special === 'beach' ? '#c9d0d3' : '#9fb0bd';
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#1c2530';
@@ -472,11 +473,20 @@ function drawFeatures(ctx: CanvasRenderingContext2D, s: number) {
     ctx.beginPath();
     ctx.ellipse(c.x, c.y, 17, 13, 0, 0, Math.PI * 2);
     ctx.fill();
+    // number on the side away from the nearest trail stone
+    let nx = 0.7;
+    let ny = 0.7;
+    const near = SPACES.filter((sp) => !sp.bridge).reduce((best, sp) => (Math.hypot(sp.x - c.x, sp.y - c.y) < Math.hypot(best.x - c.x, best.y - c.y) ? sp : best));
+    const dx = c.x - near.x;
+    const dy = c.y - near.y;
+    const len = Math.hypot(dx, dy) || 1;
+    nx = dx / len;
+    ny = dy / len;
     ctx.fillStyle = '#f2f2ff';
     ctx.font = 'bold 13px Helvetica, Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(String(c.n), c.x + 20, c.y + 8);
+    ctx.fillText(String(c.n), c.x + nx * 24, c.y + ny * 20);
   }
 
   // smolder pits
@@ -524,21 +534,18 @@ function drawFeatures(ctx: CanvasRenderingContext2D, s: number) {
     ctx.fill();
     ctx.restore();
   }
-  // lava streaks marking Vul-Kar's rollways
+  // lava streaks marking every rollway a fireball follows before it reaches a trail
   ctx.strokeStyle = 'rgba(255,90,20,0.75)';
   ctx.lineWidth = 3;
   ctx.setLineDash([9, 7]);
-  const streaks: [number, number][][] = [
-    [[520, 385], [470, 400], [462, 460], [478, 505]],
-    [[500, 365], [450, 375], [400, 360], [332, 335]],
-    [[580, 320], [600, 300], [640, 262], [668, 258]],
-    [[315, 200], [360, 215], [400, 190]],
-    [[668, 258], [640, 210], [640, 150]],
-  ];
-  for (const st of streaks) {
+  for (const r of ROUTES) {
+    if (!r.lead?.length) continue;
+    const home = FIREBALLS.find((f) => f.id === r.fireball)!;
+    const first = SPACE[r.spaces[0]];
+    const pts = [home, ...r.lead, first];
     ctx.beginPath();
-    ctx.moveTo(st[0][0], st[0][1]);
-    for (const [x, y] of st.slice(1)) ctx.lineTo(x, y);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
     ctx.stroke();
   }
   ctx.setLineDash([]);
@@ -563,33 +570,25 @@ function drawFeatures(ctx: CanvasRenderingContext2D, s: number) {
     ctx.beginPath();
     ctx.arc(RUIN.x, RUIN.y, 11, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#3a2a10';
-    ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('THE RUIN', RUIN.x, RUIN.y + 32);
   }
 
-  // The Dock: wooden pier
+  // The Dock: wooden pier reaching out from the shore over the Dock space
   {
     ctx.save();
-    ctx.translate(110, 358);
+    ctx.translate(132, 354);
     ctx.fillStyle = '#8a5a2b';
-    ctx.fillRect(-30, -14, 52, 28);
+    ctx.fillRect(-34, -13, 68, 26);
     ctx.strokeStyle = '#3d2610';
     ctx.lineWidth = 1.5;
-    for (let i = -28; i < 22; i += 5) {
+    for (let i = -32; i < 34; i += 5) {
       ctx.beginPath();
-      ctx.moveTo(i, -14);
-      ctx.lineTo(i, 14);
+      ctx.moveTo(i, -13);
+      ctx.lineTo(i, 13);
       ctx.stroke();
     }
     ctx.strokeStyle = '#5a3a18';
     ctx.lineWidth = 3;
-    ctx.strokeRect(-30, -14, 52, 28);
-    ctx.fillStyle = '#fff3c4';
-    ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('THE DOCK', -4, 26);
+    ctx.strokeRect(-34, -13, 68, 26);
     ctx.restore();
   }
 
@@ -608,19 +607,31 @@ function drawFeatures(ctx: CanvasRenderingContext2D, s: number) {
     ctx.fillText('W', 95, 303);
   }
 
-  // skeleton on Skeleton Head Beach and shipwreck
-  ctx.strokeStyle = 'rgba(70,55,35,0.8)';
+  // Skeleton Head Beach: the skeleton and the wreck that give the beach its name
+  ctx.strokeStyle = 'rgba(70,55,35,0.85)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(905, 95, 5, 0, Math.PI * 2);
-  ctx.moveTo(905, 100);
-  ctx.lineTo(905, 116);
-  ctx.moveTo(896, 106);
-  ctx.lineTo(914, 106);
-  ctx.moveTo(905, 116);
-  ctx.lineTo(898, 126);
-  ctx.moveTo(905, 116);
-  ctx.lineTo(912, 126);
+  ctx.arc(792, 112, 5, 0, Math.PI * 2);
+  ctx.moveTo(792, 117);
+  ctx.lineTo(792, 133);
+  ctx.moveTo(783, 123);
+  ctx.lineTo(801, 123);
+  ctx.moveTo(792, 133);
+  ctx.lineTo(785, 143);
+  ctx.moveTo(792, 133);
+  ctx.lineTo(799, 143);
+  ctx.stroke();
+  ctx.beginPath(); // hull ribs
+  ctx.moveTo(840, 92);
+  ctx.quadraticCurveTo(870, 112, 900, 90);
+  ctx.moveTo(852, 96);
+  ctx.lineTo(848, 76);
+  ctx.moveTo(868, 103);
+  ctx.lineTo(866, 70);
+  ctx.moveTo(884, 98);
+  ctx.lineTo(886, 78);
+  ctx.moveTo(866, 70);
+  ctx.lineTo(880, 60);
   ctx.stroke();
 
   // title
@@ -656,11 +667,12 @@ export function paintLabels(scale = 2): HTMLCanvasElement {
   const ctx = canvas.getContext('2d')!;
   ctx.scale(scale, scale);
   const labels: [string, number, number, number][] = [
-    ["DEAD MAN'S PLATEAU", 300, 626, 0], ['WITCHLORD TRAIL', 560, 612, 0.02], ['WITCHLORD STEP', 846, 560, 0],
-    ['THUNDER ALLEY', 930, 330, -Math.PI / 2], ['SKELETON HEAD BEACH', 800, 74, 0], ['LOW ROAD', 470, 72, 0],
-    ['HIGH ROAD', 420, 182, 0.05], ['GRIM GULLY', 150, 118, -0.6], ['FIREFLASH CHUTE', 700, 320, -1.2],
-    ['VUL-KAR POINT', 540, 400, 0], ['BLISTER RUN', 790, 420, -1.35], ['GREAT SWAY BLUFF', 150, 320, 0],
-    ['CHASM PEAK', 400, 262, 0.7], ['VIPER PASS', 205, 372, -0.6], ['DOCK RUN', 108, 470, -Math.PI / 2],
+    ["DEAD MAN'S PLATEAU", 300, 626, 0], ['WITCHLORD TRAIL', 560, 612, 0.02], ['WITCHLORD STEP', 828, 612, 0],
+    ['THE RUIN', 876, 604, 0], ['THUNDER ALLEY', 930, 330, -Math.PI / 2], ['SKELETON HEAD BEACH', 770, 60, 0],
+    ['LOW ROAD', 470, 72, 0], ['HIGH ROAD', 388, 114, 0.05], ['GRIM GULLY', 150, 118, -0.6],
+    ['FIREFLASH CHUTE', 700, 320, -1.2], ['VUL-KAR POINT', 540, 400, 0], ['BLISTER RUN', 790, 420, -1.35],
+    ['GREAT SWAY BLUFF', 104, 236, -1.25], ['CHASM PEAK', 300, 292, -1.2], ['VIPER PASS', 154, 386, -1.0],
+    ['DOCK RUN', 108, 470, -Math.PI / 2], ['THE DOCK', 132, 380, 0],
   ];
   ctx.font = 'bold 12px Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';

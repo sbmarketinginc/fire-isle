@@ -20,17 +20,17 @@ export const CARD_INFO: Record<CardType, CardInfo> = {
   CANCEL: {
     type: 'CANCEL',
     title: 'CANCEL ANY CARD EXCEPT FIREBALL CARD!',
-    text: 'Play this card on top of a card just played — even another CANCEL card — to cancel its effect before any action is taken. The FIREBALL! card can never be canceled.',
+    text: 'You may play this card on top of a card just played — even another CANCEL card — to cancel its effect before any action is taken. EXCEPTION: The FIREBALL! card can never be canceled!',
   },
   TALISMAN: {
     type: 'TALISMAN',
     title: 'MAGIC TALISMAN STOPS A FIREBALL!',
-    text: 'Prevents you or an opponent from rolling any of the 5 Fireballs. Play it when an opponent is about to roll a Fireball, or after you roll a "1" if your playing piece is the target.',
+    text: 'This card prevents you or an opponent from rolling any of the 5 Fireballs. Play it when an opponent is just about to roll a Fireball; or play it after you roll a "1" on the die, if your playing piece is the target.',
   },
   REROLL: {
     type: 'REROLL',
     title: 'REROLL THE DIE!',
-    text: 'Play this card after you or an opponent rolls the die. The player who rolled must ignore the first roll and roll again. If the first roll was a "1", a Fireball is not rolled.',
+    text: 'Play this card after you or an opponent rolls the die. The player who rolled must ignore the first roll, and roll again. If the first die roll was a "1", a Fireball is not rolled.',
   },
   EXTRA_TURN: {
     type: 'EXTRA_TURN',
@@ -40,22 +40,22 @@ export const CARD_INFO: Record<CardType, CardInfo> = {
   TAKE_CARD: {
     type: 'TAKE_CARD',
     title: 'TAKE 1 CARD FROM ANY OPPONENT',
-    text: 'Play on your own turn or an opponent\'s turn. Take one card at random from any opponent\'s hand. Cannot be played against a player who owns the jewel and the token at the same time.',
+    text: 'Play this card on your own turn or on an opponent\'s turn. Then take one card at random from any opponent\'s hand. NOTE: This card can never be played against a player who owns the jewel and the token at the same time!',
   },
   MOVE_AHEAD: {
     type: 'MOVE_AHEAD',
     title: 'MOVE AHEAD {n} SPACES INSTEAD OF ROLLING DIE',
-    text: 'Play on your turn to move ahead the indicated number of spaces, or on an opponent\'s turn to force the opponent to move ahead that many spaces.',
+    text: 'Play this card on your turn, to move ahead the indicated number of spaces instead of rolling the die. Or play it on an opponent\'s turn, to force the opponent to move ahead the indicated number of spaces.',
   },
   MOVE_BACK: {
     type: 'MOVE_BACK',
     title: 'MOVE ANY OPPONENT BACK {n} SPACE(S)',
-    text: 'Play on any opponent\'s turn to move that opponent back on the trail. Played before the roll: they move back before rolling. Played after: they finish the move, then move back. Does not move players out of caves, smolder pits, or the water penalty area.',
+    text: 'Play this card on any opponent\'s turn to move the opponent back on the trail the number of spaces indicated. Played before the opponent rolls: they move back before rolling. Played after: they finish the move, then move back. These cards do not move players out of caves, smolder pits, or the water penalty area. If this card moves an opponent back onto an unoccupied bridge, the opponent must end the move on the bridge.',
   },
   DOUBLE: {
     type: 'DOUBLE',
     title: 'DOUBLE THE NEXT DIE ROLL',
-    text: 'Play on your own turn or an opponent\'s turn to double the next die roll. A roll of "1" becomes a "2" and a Fireball is not rolled.',
+    text: 'Play this card on your own turn or on an opponent\'s turn, to double the next die roll. For example, a die roll of "1" becomes a "2" and a Fireball is not rolled.',
   },
 };
 

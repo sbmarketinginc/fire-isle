@@ -46,7 +46,7 @@ describe('board data', () => {
     expect(CAVE[4].entry).toBeUndefined();
     for (const p of Object.values(PIT)) expect(SPACE[p.rockChip]).toBeDefined();
     for (const r of ROUTES) for (const s of r.spaces) expect(SPACE[s]).toBeDefined();
-    expect(ROUTES.filter((r) => r.fireball === 'V').length).toBe(5);
+    expect(ROUTES.filter((r) => r.fireball === 'V').length).toBe(6);
   });
   it('every fireball-affected space lies on at least one trailway (Figure 6 chart)', () => {
     const covered = new Set(ROUTES.flatMap((r) => r.spaces));
@@ -119,12 +119,45 @@ describe('movement rules', () => {
     s.players[0].loc = { kind: 'space', id: 'BR2' };
     let paths = legalPaths(s, { player: 0, steps: 4, from: 'BR2', allowCaves: true });
     expect(paths.some((p) => p.join('>') === 'BR1>VKP>FC8>FC7')).toBe(true);
-    s.players[0].loc = { kind: 'space', id: 'DR7' };
-    paths = legalPaths(s, { player: 0, steps: 6, from: 'DR7', allowCaves: true });
-    expect(paths.some((p) => p.join('>') === 'DR8>DOCK')).toBe(true);
-    s.players[1].loc = { kind: 'space', id: 'DR7' };
-    paths = legalPaths(s, { player: 1, steps: 6, from: 'DR7', allowCaves: true });
-    expect(paths.some((p) => p.includes('DOCK'))).toBe(false);
+    s.players[0].loc = { kind: 'space', id: 'DR9' };
+    paths = legalPaths(s, { player: 0, steps: 6, from: 'DR9', allowCaves: true });
+    expect(paths.some((p) => p.join('>') === 'DR10>DOCK')).toBe(true);
+    s.players[1].loc = { kind: 'space', id: 'DR9' };
+    paths = legalPaths(s, { player: 1, steps: 6, from: 'DR9', allowCaves: true });
+    expect(paths.some((p) => p.includes('DOCK'))).toBe(true); // anyone may step onto the Dock; only the jewel wins
+  });
+  it('stealing the jewel on the way to the Dock wins on the same move', () => {
+    let s = newGame(90, 2);
+    s.players[1].loc = { kind: 'space', id: 'DR9' };
+    s.players[1].hasJewel = true;
+    s.jewel = { kind: 'player', player: 1 };
+    s.players[0].loc = { kind: 'space', id: 'DR8' };
+    s.players[0].hand = [];
+    s.players[1].hand = [];
+    s.active = 0;
+    s.phase = 'awaitMove';
+    s.move = { steps: 2, fromCard: true, from: 'space', legal: legalPaths(s, { player: 0, steps: 2, from: 'DR8', allowCaves: true }) };
+    expect(s.move.legal.some((p) => p.join('>') === 'DR9>DR10')).toBe(true);
+    s = act(s, 0, { type: 'MOVE', path: ['DR9', 'DR10'] });
+    s = drain(s); // steal resolves, then the thief reaches DR8 (no exact count needed for the Dock later)
+    expect(s.players[0].hasJewel).toBe(true);
+    // and a longer roll reaches the Dock on the same move
+    let t = newGame(91, 2);
+    t.players[1].loc = { kind: 'space', id: 'DR9' };
+    t.players[1].hasJewel = true;
+    t.jewel = { kind: 'player', player: 1 };
+    t.players[0].loc = { kind: 'space', id: 'DR8' };
+    t.players[0].hand = [];
+    t.players[1].hand = [];
+    t.active = 0;
+    t.phase = 'awaitMove';
+    t.move = { steps: 3, fromCard: true, from: 'space', legal: legalPaths(t, { player: 0, steps: 3, from: 'DR8', allowCaves: true }) };
+    const winning = t.move.legal.find((p) => p.join('>') === 'DR9>DR10>DOCK')!;
+    expect(winning).toBeDefined();
+    t = act(t, 0, { type: 'MOVE', path: winning });
+    t = drain(t);
+    expect(t.phase).toBe('gameOver');
+    expect(t.winner).toBe(0);
   });
   it('can enter a cave counting it as a space, ending the move', () => {
     const s = newGame();
@@ -246,9 +279,9 @@ describe('fireballs', () => {
     s.players[0].loc = { kind: 'space', id: 'GSB3' };
     expect(routeHits(s, ROUTES.find((r) => r.id === 'C-bridge')!)).toEqual([]);
     s.players[0].loc = { kind: 'space', id: 'HR3' };
-    expect(routeHits(s, ROUTES.find((r) => r.id === 'D-highroad')!)).toEqual([]);
-    s.players[0].loc = { kind: 'space', id: 'HR9' };
-    expect(routeHits(s, ROUTES.find((r) => r.id === 'D-highroad')!)).toEqual([0]);
+    expect(routeHits(s, ROUTES.find((r) => r.id === 'C-highroad')!)).toEqual([]);
+    s.players[0].loc = { kind: 'space', id: 'HR12' };
+    expect(routeHits(s, ROUTES.find((r) => r.id === 'C-highroad')!)).toEqual([0]);
   });
 });
 
@@ -464,7 +497,42 @@ describe('review follow-ups', () => {
     s = act(s, 0, { type: 'PASS' });
     expect(s.players[0].hasJewel).toBe(true);
   });
-  it('knocked off a bridge on your own turn forfeits the pending move', () => {
+  it('DOUBLE survives a REROLL of the doubled roll, and a cave roll can be rerolled', () => {
+    let s = newGame(95, 2);
+    s.doubleNextRoll = true;
+    s.players[0].hand = [];
+    s.players[1].hand = [{ uid: 9, type: 'REROLL' }];
+    s.active = 0;
+    s.phase = 'awaitRoll';
+    s = act(s, 0, { type: 'ROLL' });
+    expect(s.lastRoll).toBe((s.lastRollRaw ?? 0) * 2);
+    s = act(s, 1, { type: 'PLAY_CARD', uid: 9 });
+    s = drain(s);
+    expect(s.lastRoll).toBe((s.lastRollRaw ?? 0) * 2); // the replacement roll is doubled too
+    let t = newGame(96, 2);
+    t.players[0].loc = { kind: 'cave', n: 2 };
+    t.players[0].hand = [];
+    t.players[1].hand = [{ uid: 9, type: 'REROLL' }];
+    t.active = 0;
+    t.phase = 'awaitRoll';
+    t.cave = { choice: 'newCave' };
+    t = act(t, 0, { type: 'ROLL' });
+    expect(t.phase).toBe('postCaveRoll');
+    const first = t.lastCaveRoll;
+    t = act(t, 1, { type: 'PLAY_CARD', uid: 9 });
+    t = drain(t);
+    expect(first).toBeDefined();
+    expect(t.log.filter((e) => e.type === 'caveRoll').length).toBe(2); // the cave die was rolled again
+  });
+  it('a dead-end branch cannot be used to stop short when a full move exists', () => {
+    const s = newGame(97, 2);
+    s.players[0].loc = { kind: 'space', id: 'S1' };
+    s.players[1].loc = { kind: 'cave', n: 6 };
+    const paths = legalPaths(s, { player: 0, steps: 6, from: 'S1', allowCaves: true });
+    expect(paths.some((p) => p.join('>') === 'S2>S3>S4')).toBe(false);
+    expect(paths.every((p) => p.filter((x) => !x.startsWith('CAVE')).length === 6 || SPACE[p[p.length - 1]]?.bridge)).toBe(true);
+  });
+  it('knocked off a bridge on your own turn, the pending roll is spent climbing from the water', () => {
     let s = newGame(83, 2);
     s.players[0].loc = { kind: 'space', id: 'BRIDGE1' };
     s.players[0].hand = [];
@@ -477,8 +545,9 @@ describe('review follow-ups', () => {
     s = act(s, 1, { type: 'PLAY_CARD', uid: 5 });
     s = act(s, 1, { type: 'CHOOSE_FIREBALL', route: 'C-bridge' });
     s = drain(s);
-    expect(s.players[0].loc).toEqual({ kind: 'water' });
-    expect(s.active).toBe(1);
+    expect(s.active).toBe(0);
+    expect(s.phase).toBe('awaitMove');
+    for (const p of s.move!.legal) expect(p[0]).toBe('GSB1');
   });
   it('stealing from an owner standing on Witchlord Step still grants the token', () => {
     let s = newGame(80, 2);
@@ -495,6 +564,48 @@ describe('review follow-ups', () => {
     s = drain(s);
     expect(s.players[0].hasJewel).toBe(true);
     expect(s.players[0].hasToken).toBe(true);
+  });
+  it('a move back grants the token and a dark-space card like any other move', () => {
+    let s = newGame(92, 2);
+    s.players[0].loc = { kind: 'space', id: 'TA2' };
+    s.players[0].hand = [];
+    s.players[1].hand = [{ uid: 7, type: 'MOVE_BACK', n: 3 }];
+    s.active = 0;
+    s.phase = 'preRoll';
+    s.window = { passed: [] };
+    s = act(s, 1, { type: 'PLAY_CARD', uid: 7 });
+    s = drain(s);
+    expect(s.phase).toBe('chooseMoveBackPath');
+    const path = s.moveBack!.legal.find((p) => p.join('>') === 'TA1>WS>WT19')!;
+    s = act(s, 1, { type: 'CHOOSE_MOVE_BACK', path });
+    expect(s.players[0].hasToken).toBe(true);
+    // landing on a dark trail space draws a card
+    let t = newGame(94, 2);
+    t.players[0].loc = { kind: 'space', id: 'WT4' };
+    t.players[0].hand = [];
+    t.players[1].hand = [{ uid: 7, type: 'MOVE_BACK', n: 2 }];
+    t.active = 0;
+    t.phase = 'preRoll';
+    t.window = { passed: [] };
+    t = act(t, 1, { type: 'PLAY_CARD', uid: 7 });
+    t = drain(t);
+    expect(SPACE.WT2.dark).toBe(true);
+    t = act(t, 1, { type: 'CHOOSE_MOVE_BACK', path: ['WT3', 'WT2'] });
+    expect(t.players[0].hand.length).toBe(1);
+  });
+  it('MOVE AHEAD can be forced on a piece standing up in a pit, sending it out via the Rock Chip space', () => {
+    let s = newGame(93, 2);
+    s.players[0].loc = { kind: 'pit', pit: 'A', down: false };
+    s.players[0].hand = [];
+    s.players[1].hand = [{ uid: 8, type: 'MOVE_AHEAD', n: 4 }];
+    s.active = 0;
+    s.phase = 'preRoll';
+    s.window = { passed: [] };
+    expect(eligibility(s, 1).cards).toContain(8);
+    s = act(s, 1, { type: 'PLAY_CARD', uid: 8, target: 0 });
+    s = drain(s);
+    expect(s.phase).toBe('awaitMove');
+    for (const p of s.move!.legal) expect(p[0]).toBe('WT5');
   });
   it('the token cannot be traded with a full hand, and may be traded after moving', () => {
     const s = newGame(81, 2);

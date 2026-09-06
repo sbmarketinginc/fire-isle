@@ -1,6 +1,6 @@
 // Fire Isle rules engine — a faithful implementation of the 1986 Fireball Island rulebook.
 import {
-  CAVE, FIREBALL, PIT, ROUTE, ROUTES, SPACE, TRAIL_NAMES, pitForSpace,
+  CAVE, FIREBALL, PIT, ROUTE, ROUTES, SPACE, SPACES, TRAIL_NAMES, pitForSpace,
 } from './board.ts';
 import { HAND_LIMIT, buildDeck, cardTitle } from './cards.ts';
 import { CAVE_PREFIX, caveOccupant, legalPaths, occupant, pathEndsInCave } from './paths.ts';
@@ -26,7 +26,9 @@ export const isWindowPhase = (p: Phase) => WINDOW_PHASES.includes(p);
  */
 const REACTIVE_WINDOWS: Phase[] = ['preFireball', 'stealAttempt', 'cardResponse', 'postCaveRoll'];
 export const isReactiveWindow = (p: Phase) => REACTIVE_WINDOWS.includes(p);
-const ANYTIME_PHASES: Phase[] = ['preRoll', 'postRoll', 'postMove', 'postTurn'];
+// FIREBALL, TAKE 1 CARD and DOUBLE may be played in every response window except while a fireball
+// is already pending or a CANCEL response is open (one card stack and one fireball at a time).
+const ANYTIME_PHASES: Phase[] = ['preRoll', 'postRoll', 'postMove', 'postTurn', 'stealAttempt', 'postCaveRoll'];
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -179,7 +181,7 @@ export function eligibility(state: GameState, pid: PlayerId): Eligibility {
 
   // the Magic Charm token may be traded in on any one of your turns (before rolling or after moving)
   const tradePhases: Phase[] = ['awaitRoll', 'postMove', 'postTurn'];
-  e.canTradeToken = isActive && p.hasToken && p.hand.length < HAND_LIMIT && tradePhases.includes(ph) && !state.skippedTurn;
+  e.canTradeToken = isActive && p.hasToken && p.hand.length < HAND_LIMIT && tradePhases.includes(ph);
   if (isWindowPhase(ph)) {
     e.canPass = !state.window.passed.includes(pid);
     if (e.canPass) e.cards = p.hand.filter((c) => cardPlayable(state, pid, c)).map((c) => c.uid);
@@ -224,10 +226,10 @@ export function cardPlayable(state: GameState, pid: PlayerId, card: Card): boole
     case 'DOUBLE':
       return anytime && !state.doubleNextRoll;
     case 'MOVE_BACK':
-      return !isActive && (ph === 'preRoll' || ph === 'postRoll' || ph === 'postMove') && activeP.loc.kind !== 'pit' && activeP.loc.kind !== 'water' && !(ph !== 'postRoll' && activeP.loc.kind === 'cave');
+      return !isActive && (ph === 'preRoll' || ph === 'postRoll' || ph === 'postMove' || ph === 'postTurn') && activeP.loc.kind !== 'pit' && activeP.loc.kind !== 'water' && !(ph !== 'postRoll' && activeP.loc.kind === 'cave');
     case 'MOVE_AHEAD':
       if (isActive) return ph === 'awaitRoll' && (p.loc.kind !== 'cave' || state.cave?.choice === 'exit');
-      return ph === 'preRoll' && activeP.loc.kind === 'space' && state.forcedSteps === undefined;
+      return ph === 'preRoll' && state.forcedSteps === undefined && !(activeP.loc.kind === 'pit' && activeP.loc.down) && !(activeP.loc.kind === 'cave' && !CAVE[activeP.loc.n].entry);
     case 'REROLL':
       return ph === 'postRoll' || ph === 'postCaveRoll';
     case 'EXTRA_TURN':
@@ -239,11 +241,9 @@ export function cardPlayable(state: GameState, pid: PlayerId, card: Card): boole
     }
     case 'FAKE_JEWEL':
       return ph === 'stealAttempt' && state.steal?.owner === pid;
-    case 'CANCEL': {
-      if (ph !== 'cardResponse' || state.cardStack.length === 0) return false;
-      const top = state.cardStack[state.cardStack.length - 1];
-      return top.card.type !== 'FIREBALL';
-    }
+    case 'CANCEL':
+      // a FIREBALL! never enters the card stack (playCard rolls it at once), so anything on the stack can be canceled
+      return ph === 'cardResponse' && state.cardStack.length > 0;
   }
 }
 
@@ -425,7 +425,7 @@ function executeMove(state: GameState, events: LogEvent[], path: string[]) {
   continueMove(state, events);
 }
 
-function describeSpace(id: string): string {
+export function describeSpace(id: string): string {
   const s = SPACE[id];
   if (!s) return id;
   if (s.special === 'start') return "Dead Man's Plateau";
@@ -433,7 +433,10 @@ function describeSpace(id: string): string {
   if (s.special === 'dock') return 'the Dock';
   if (s.special === 'witchlordStep') return 'Witchlord Step';
   if (s.special === 'beach') return 'Skeleton Head Beach';
-  return TRAIL_NAMES[s.trail];
+  if (s.bridge) return id === 'BRIDGE1' ? 'the Great Sway Bluff bridge' : 'the Viper Pass bridge';
+  const n = id.match(/(\d+)$/)?.[1];
+  const total = SPACES.filter((o) => o.trail === s.trail && /\d+$/.test(o.id)).length;
+  return n && total > 1 ? `${TRAIL_NAMES[s.trail]} (space ${n} of ${total})` : TRAIL_NAMES[s.trail];
 }
 
 function continueMove(state: GameState, events: LogEvent[]) {
@@ -470,10 +473,13 @@ function continueMove(state: GameState, events: LogEvent[]) {
     if (last) {
       active.loc = { kind: 'space', id };
       if (SPACE[id].special === 'dock') {
-        state.phase = 'gameOver';
-        state.winner = state.active;
-        log(state, events, 'win', `${active.name} reaches the Dock with the jewel and wins the game!`, state.active);
-        return;
+        if (active.hasJewel) {
+          state.phase = 'gameOver';
+          state.winner = state.active;
+          log(state, events, 'win', `${active.name} reaches the Dock with the jewel and wins the game!`, state.active);
+          return;
+        }
+        log(state, events, 'dockEmpty', `${active.name} reaches the Dock without the jewel.`, state.active);
       }
       if (SPACE[id].special === 'vulkar' && state.jewel.kind === 'vulkar') {
         state.jewel = { kind: 'player', player: state.active };
@@ -546,8 +552,10 @@ function resolveCaveRoll(state: GameState, events: LogEvent[]) {
   const rolledOne = n === 1;
   if (active.loc.kind === 'cave') {
     const occ = caveOccupant(state, n);
-    if (occ) {
-      log(state, events, 'caveBlocked', `Cave ${n} is occupied — ${active.name} stays in Cave ${active.loc.n}.`, state.active);
+    if (occ && occ.id === state.active) {
+      log(state, events, 'caveBlocked', `${active.name} rolls their own cave and stays in Cave ${n}.`, state.active);
+    } else if (occ) {
+      log(state, events, 'caveBlocked', `Cave ${n} is occupied by ${occ.name} — ${active.name} stays in Cave ${active.loc.n}.`, state.active);
     } else {
       active.loc = { kind: 'cave', n };
       log(state, events, 'caveMove', `${active.name} comes out in Cave ${n}${CAVE[n].entry ? ` by ${TRAIL_NAMES[SPACE[CAVE[n].entry].trail]}` : ' — a dead end!'}.`, state.active, { cave: n });
@@ -621,10 +629,11 @@ function afterFireball(state: GameState, events: LogEvent[]) {
   // (it stands up next turn and rolls out the turn after, per the rulebook).
   const active = state.players[state.active];
   const beforeMove = fb.resume === 'preRoll' || fb.resume === 'postRoll' || fb.resume === 'awaitRoll';
-  const knockedOut = (active.loc.kind === 'pit' && active.loc.down) || active.loc.kind === 'water';
+  // (a piece knocked into the water keeps its pending roll: the rulebook says the water costs no turn)
+  const knockedOut = active.loc.kind === 'pit' && active.loc.down;
   if (fb.reason === 'card' && beforeMove && knockedOut) {
     state.forcedSteps = undefined;
-    log(state, events, 'turnLost', active.loc.kind === 'water' ? `${active.name} is in the water — the rest of the turn is lost.` : `${active.name} is lying in the smolder pit — the rest of the turn is lost.`, state.active);
+    log(state, events, 'turnLost', `${active.name} is lying in the smolder pit — the rest of the turn is lost.`, state.active);
     openWindow(state, 'postMove', events);
     return;
   }
@@ -638,6 +647,29 @@ function afterFireball(state: GameState, events: LogEvent[]) {
   if (fb.reason === 'rolledOne') {
     openWindow(state, 'postMove', events);
     return;
+  }
+  if (fb.resume === 'stealAttempt' && state.steal) {
+    const thief = state.players[state.steal.thief];
+    const owner = state.players[state.steal.owner];
+    if (thief.loc.kind !== 'space') {
+      // the thief was knocked out mid-move: the move (and the steal) are over
+      state.steal = undefined;
+      if (state.move) state.move.executing = undefined;
+      log(state, events, 'moveAborted', `${thief.name}'s move ends where the fireball left them.`, thief.id);
+      openWindow(state, 'postMove', events);
+      return;
+    }
+    if (!owner.hasJewel) {
+      // the owner lost the jewel to the fireball: nothing left to steal, carry on moving
+      state.steal = undefined;
+      if (state.move?.executing) {
+        state.move.executing.passedStep = true;
+        continueMove(state, events);
+      } else {
+        openWindow(state, 'postMove', events);
+      }
+      return;
+    }
   }
   resumePhase(state, events, fb.resume);
 }
@@ -712,6 +744,8 @@ function resolveCardStack(state: GameState, events: LogEvent[]) {
         if (resume === 'postCaveRoll') {
           rollForCave(state, events);
         } else {
+          // the ignored roll never happened: a DOUBLE spent on it applies to the new roll instead
+          if (state.lastRollRaw !== undefined && state.lastRoll !== undefined && state.lastRoll !== state.lastRollRaw) state.doubleNextRoll = true;
           doRoll(state, events);
           openWindow(state, 'postRoll', events);
         }
@@ -810,13 +844,23 @@ function applyMoveBack(state: GameState, events: LogEvent[], path: string[]) {
   const dest = path[path.length - 1];
   t.loc = { kind: 'space', id: dest };
   log(state, events, 'movedBack', `${t.name} is moved back ${path.length} space${path.length === 1 ? '' : 's'} to ${describeSpace(dest)}.`, mb.target, { path });
-  // a dropped jewel on the way is picked up (moving onto or passing the Rock Chip space / bridge)
+  // passing effects apply as on any move: a dropped jewel is picked up, Witchlord Step gives a token
   for (const id of path) {
     if (state.jewel.kind === 'space' && state.jewel.id === id) {
       state.jewel = { kind: 'player', player: mb.target };
       t.hasJewel = true;
       log(state, events, 'jewelPicked', `${t.name} picks up the jewel!`, mb.target);
     }
+    if (SPACE[id].special === 'witchlordStep' && !t.tokenCollected && state.tokensInRuin > 0) {
+      t.tokenCollected = true;
+      t.hasToken = true;
+      state.tokensInRuin -= 1;
+      log(state, events, 'token', `${t.name} collects a Magic Charm token from the Ruin.`, mb.target);
+    }
+  }
+  if (SPACE[dest].dark) {
+    if (t.hand.length < HAND_LIMIT) drawCard(state, mb.target, events);
+    else log(state, events, 'handFull', `${t.name} lands on a dark trail space but already holds 4 cards.`, mb.target);
   }
   state.moveBack = undefined;
   resumePhase(state, events, mb.resume);

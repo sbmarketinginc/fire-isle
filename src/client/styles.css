@@ -27,7 +27,10 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 
 /* top bar */
 .topbar { display: flex; gap: 8px; align-items: center; padding: calc(8px + var(--safe-top)) 10px 8px; background: linear-gradient(180deg, rgba(10,4,20,0.85), rgba(10,4,20,0)); }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.chips { display: flex; gap: 6px; flex-wrap: nowrap; flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.chips::-webkit-scrollbar { display: none; }
+.topbar > button { flex-shrink: 0; }
+.chip .name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
 .chip { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 6px; border-radius: 999px; background: var(--panel); border: 1px solid rgba(255,255,255,0.15); font-size: 12px; white-space: nowrap; }
 .chip .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.7); }
 .chip.active { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(255,230,109,0.35); }
@@ -40,6 +43,10 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 
 /* bottom panel */
 .bottom { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px calc(10px + var(--safe-bottom)); background: linear-gradient(0deg, rgba(10,4,20,0.9), rgba(10,4,20,0)); }
+.controls { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.handwrap { position: relative; min-width: 0; }
+.handwrap::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 34px; background: linear-gradient(90deg, rgba(10,4,20,0), rgba(10,4,20,0.85)); pointer-events: none; border-radius: 0 10px 10px 0; }
+.handwrap.noFade::after { display: none; }
 .status { background: var(--panel); border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius); padding: 8px 12px; font-size: 14px; line-height: 1.35; }
 .status b { color: var(--accent2); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -83,6 +90,22 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 .spacer { flex: 1; }
 .dieface { display: inline-block; min-width: 34px; padding: 4px 8px; border-radius: 8px; background: #fff; color: #111; font-weight: 800; text-align: center; }
 @media (max-width: 480px) {
-  .card { width: 104px; font-size: 10px; }
-  .chip { font-size: 11px; }
+  .card { width: 88px; min-height: 80px; font-size: 9.5px; padding: 6px; }
+  .card .art { height: 22px; }
+  .chip { font-size: 11px; padding: 3px 7px 3px 5px; }
+  .chip .loc { max-width: 72px; }
+  .iconbtn { padding: 6px 7px; font-size: 13px; }
+  .topbar { gap: 5px; padding-left: 6px; padding-right: 6px; }
+}
+/* landscape phones: keep the island visible by laying the controls beside the hand */
+@media (max-height: 460px) and (orientation: landscape) {
+  .bottom { flex-direction: row; align-items: flex-end; gap: 10px; padding-top: 4px; }
+  .controls { flex: 0 1 46%; }
+  .handwrap { flex: 1 1 54%; }
+  .status { font-size: 12px; padding: 6px 10px; }
+  .actions button { padding: 7px 10px; font-size: 13px; min-width: 90px; }
+  .card { width: 92px; min-height: 64px; font-size: 9px; padding: 5px; }
+  .card .art { height: 14px; margin-bottom: 3px; }
+  .topbar { padding-top: calc(4px + var(--safe-top)); padding-bottom: 4px; }
+  .log { max-height: 60vh; top: calc(48px + var(--safe-top)); }
 }

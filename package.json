@@ -9,7 +9,6 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "server": "node --experimental-strip-types server/server.ts",
-    "server:build": "tsc -p tsconfig.server.json",
     "start": "npm run build && node --experimental-strip-types server/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",

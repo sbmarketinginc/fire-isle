@@ -287,7 +287,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   let file = path.join(DIST, decodeURIComponent(url.pathname));
-  if (!file.startsWith(DIST)) {
+  if (file !== DIST && !file.startsWith(DIST + path.sep)) {
     res.writeHead(403);
     res.end();
     return;

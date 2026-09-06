@@ -244,28 +244,3 @@ export function makeHighlight(color = 0xffd54a): THREE.Mesh {
   m.renderOrder = 5;
   return m;
 }
-
-export function makeTextSprite(text: string, color = '#ffffff', bg = 'rgba(0,0,0,0.55)', size = 44): THREE.Sprite {
-  const c = document.createElement('canvas');
-  const ctx = c.getContext('2d')!;
-  ctx.font = `bold ${size}px Helvetica, Arial, sans-serif`;
-  const w = Math.ceil(ctx.measureText(text).width) + 40;
-  c.width = w;
-  c.height = size + 24;
-  const ctx2 = c.getContext('2d')!;
-  ctx2.font = `bold ${size}px Helvetica, Arial, sans-serif`;
-  ctx2.fillStyle = bg;
-  ctx2.beginPath();
-  ctx2.roundRect(0, 0, w, c.height, 14);
-  ctx2.fill();
-  ctx2.fillStyle = color;
-  ctx2.textAlign = 'center';
-  ctx2.textBaseline = 'middle';
-  ctx2.fillText(text, w / 2, c.height / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set((w / c.height) * 0.5, 0.5, 1);
-  sp.renderOrder = 10;
-  return sp;
-}

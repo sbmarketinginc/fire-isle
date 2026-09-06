@@ -7,7 +7,8 @@ import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
   dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makePiece, makeToken,
 } from './models.ts';
-import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, surfacePoint, toWorld } from './terrain.ts';
+import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, surfacePoint } from './terrain.ts';
+import { BOARD_H, BOARD_W } from '../../engine/board.ts';
 import type { SceneApp } from './scene.ts';
 import { duckMusic, sfx } from '../audio.ts';
 
@@ -64,8 +65,8 @@ export class Board3D {
     table.receiveShadow = true;
     this.group.add(table);
 
-    // idol on Vul-Kar Point
-    const vk = surfacePoint(SPACE.VKP.x, SPACE.VKP.y - 6);
+    // idol on Vul-Kar Point, set back so a piece standing on the point is not inside it
+    const vk = surfacePoint(SPACE.VKP.x, SPACE.VKP.y - 30);
     this.idol.position.copy(vk);
     this.idol.rotation.y = this.idolTargetRot;
     this.idol.scale.setScalar(0.62);
@@ -118,8 +119,21 @@ export class Board3D {
     return surfacePoint(f.x, f.y, 0.2);
   }
 
+  overview() {
+    this.app.overview();
+  }
+
   spacePoint(id: string, lift = 0): THREE.Vector3 {
     const s = SPACE[id];
+    if (s.bridge) {
+      // stand on the bridge deck, not on the gorge floor below it
+      const def = BRIDGE_DEFS.find((b) => b.id === id)!;
+      const a = surfacePoint(SPACE[def.from].x, SPACE[def.from].y, 0.02);
+      const c = surfacePoint(SPACE[def.to].x, SPACE[def.to].y, 0.02);
+      const p = surfacePoint(s.x, s.y, 0);
+      p.y = Math.max(a.y, c.y) + 0.12 + 0.03 + lift;
+      return p;
+    }
     return surfacePoint(s.x, s.y, lift);
   }
 
@@ -146,8 +160,8 @@ export class Board3D {
     }
     const others = view.players.filter((o) => o.loc.kind === 'water');
     const idx = others.findIndex((o) => o.id === pid);
-    const [wx, wz] = toWorld(95 + idx * 12, 300 + idx * 8);
-    return { pos: new THREE.Vector3(wx, 0.05, wz), lying: false, sunk: false };
+    const wp = surfacePoint(SPACE.W.x + idx * 12, SPACE.W.y + idx * 8, 0.04); // afloat in the water penalty area
+    return { pos: wp, lying: false, sunk: false };
   }
 
   /** Synchronise every object with the view (no animation). */
@@ -230,7 +244,7 @@ export class Board3D {
   // Choices (highlighted spaces)
   // ---------------------------------------------------------------------------
 
-  showChoices(paths: string[][]) {
+  showChoices(paths: string[][], frame = false) {
     this.clearChoices();
     const byEnd = new Map<string, string[][]>();
     for (const p of paths) {
@@ -249,6 +263,20 @@ export class Board3D {
       this.highlights.push(h);
       this.choiceMap.set(h, ps);
       this.group.add(h);
+    }
+    if (frame && this.highlights.length) {
+      // frame the camera on the piece and every reachable space
+      const box = new THREE.Box3();
+      for (const h of this.highlights) box.expandByPoint(h.position);
+      if (this.view) {
+        const g = this.pieces.get(this.view.active);
+        if (g) box.expandByPoint(g.position);
+      }
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const span = Math.max(size.x, size.z, 2.5);
+      const aspect = Math.min(1, this.app.camera.aspect);
+      this.app.focusOn(center, THREE.MathUtils.clamp((span * 1.6) / aspect + 4, 7, 40));
     }
   }
 
@@ -355,7 +383,7 @@ export class Board3D {
     const target = this.app.controls.target.clone();
     const toCam = new THREE.Vector3().subVectors(cam.position, target).setY(0).normalize();
     const pos = target.clone().add(toCam.multiplyScalar(Math.min(5, cam.position.distanceTo(target) * 0.35)));
-    pos.y = Math.max(heightAt(pos.x / BOARD_SCALE + 512, pos.z / BOARD_SCALE + 372), 0) + 0.6;
+    pos.y = Math.max(heightAt(pos.x / BOARD_SCALE + BOARD_W / 2, pos.z / BOARD_SCALE + BOARD_H / 2), 0) + 0.6;
     die.position.copy(pos);
     die.visible = true;
     sfx.dice();

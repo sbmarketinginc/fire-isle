@@ -33,7 +33,7 @@ export class SceneApp {
     this.controls.maxPolarAngle = 1.32;
     this.controls.minPolarAngle = 0.15;
     this.controls.minDistance = 4;
-    this.controls.maxDistance = 34;
+    this.controls.maxDistance = 60;
     this.controls.target.set(0, 1, 0.5);
     this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     this.controls.screenSpacePanning = false;
@@ -104,7 +104,9 @@ export class SceneApp {
   }
 
   overview() {
-    this.focusOn(new THREE.Vector3(0, 1, 0.5), 22);
+    // portrait phones need to pull back further to fit the island's width
+    const aspect = Math.min(1.2, Math.max(0.4, this.camera.aspect));
+    this.focusOn(new THREE.Vector3(0, 1, 0.5), Math.min(55, 24 / aspect));
   }
 
   /** Raycast helper for taps. */

@@ -5,7 +5,8 @@ playable in a mobile browser (installable as a PWA) or wrapped as a native app w
 
 The island, trails, caves, bridges, smolder pits, fireball trailways, Vul-Kar, the jewel, the Magic
 Charm tokens, and the 48-card deck follow the original rulebook; the engine enforces the rules, the
-3D board is a replica of the vacuum-formed gameboard, and up to four players can play on one device
+3D board is modelled on the vacuum-formed gameboard (procedural relief and a painted texture laid
+out from the real board), and up to four players can play on one device
 (pass-and-play) or online through the included server.
 
 **Play it now:** https://sbmarketinginc.github.io/fire-isle/ (Pass & Play on one phone; add it to
@@ -73,22 +74,31 @@ Digital interpretations worth knowing:
 * "Move any opponent back": the player of the card picks the path, so the victim cannot turn the
   penalty into progress.
 * DOUBLE applies to the next movement roll.
-* Only the jewel owner may step onto the Dock.
+* Anyone may step onto the Dock; whoever arrives holding the jewel wins, including a thief who
+  took it on that same move.
 * The capture bonus grants 3 full turns after the capturing turn. DOUBLE does not apply to a cave
-  roll. A MOVE BACK penalty never awards a token or steals the jewel on the way. Any-time cards
-  cannot interrupt a player who is picking a path or aiming a fireball. A piece fireballed on its
-  own turn (into a pit or the water) forfeits the rest of that turn.
+  roll. A MOVE BACK penalty picks up a dropped jewel, collects the Witchlord Step token and draws
+  on a dark space like any move, but never steals. FIREBALL, TAKE 1 CARD and DOUBLE may be played
+  in every response window except while another fireball is pending or a CANCEL response is open.
+  A piece fireballed into a smolder pit on its own turn forfeits the rest of that turn; one knocked
+  into the water keeps its pending roll and spends it climbing Great Sway Bluff, since the rulebook
+  says the water costs no turn. A DOUBLE spent on a roll that is then rerolled applies to the new
+  roll. When a landing space is occupied, the bumped piece may take either forward branch at a fork
+  but never turns back.
 * Response windows for a fireball, a steal, a card play or a cave roll wait for everyone to pass,
   and idle players are passed after the same short delay every time, so nobody can tell from the
-  timing whether an opponent is holding a TALISMAN, FAKE JEWEL, CANCEL or REROLL.
+  timing whether an opponent is holding a TALISMAN, FAKE JEWEL, CANCEL or REROLL. The routine
+  windows before and after a roll or a move close at once when nobody can act; the cards playable
+  there are common enough that this reveals little.
 * Caves may be entered past an opponent standing on the entry space; an occupied cave cannot be
   entered. The Magic Charm token can be traded before rolling or after moving on your turn, and
   not while your hand is already full.
 * Fireball rolls are resolved by trailway: every piece on the chosen trailway is hit, matching the
   rulebook's smolder-pit chart (Figure 6). Vul-Kar can face south (down Blister Run), west (over
   the bridge, down Viper Pass and Dock Run), east (up Fireflash Chute) or north-east (to Skeleton
-  Head Beach) or south-west (down the painted lava channel to Witchlord Trail); the western Low
-  Road stretch from the Grim Gully fork is out of reach, as on Figure 6. Vul-Kar's west roll is
+  Head Beach, then either Blister Run or the Low Road) or south-west (down the painted lava channel
+  to Witchlord Trail); the Low Road from the Grim Gully fork to just past pit D is out of reach, as
+  on Figure 6. Vul-Kar's west roll is
   modelled as continuing along Viper Pass and Dock Run to the Dock; check that against a physical
   board if you have one.
 * A piece fireballed during its own turn loses the rest of that turn, stands up on its next turn,

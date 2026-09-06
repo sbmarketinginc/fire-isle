@@ -1,5 +1,5 @@
 // Legal movement enumeration.
-import { ADJ, CAVE, SPACE } from './board.ts';
+import { ADJ, SPACE } from './board.ts';
 import type { CaveNum, GameState, PlayerId, PlayerState } from './types.ts';
 
 export const CAVE_PREFIX = 'CAVE:';
@@ -35,20 +35,20 @@ export interface PathOptions {
  *  - if the landing space is occupied, continue to the next open space
  *  - a bridge counts as a space; an unoccupied bridge stops you; an occupied one may be crossed
  *  - Vul-Kar Point captures the jewel and ends the move (no exact count needed) while the jewel rests there
- *  - the Dock is the finish (no exact count); only the jewel owner may enter it
+ *  - the Dock is the finish (no exact count); reaching it with the jewel wins
  *  - entering an adjacent cave counts as a space and ends the move
  */
 export function legalPaths(state: GameState, opts: PathOptions): string[][] {
-  const me = state.players[opts.player];
   const results: string[][] = [];
+  const partial: string[][] = []; // moves cut short by a dead end (only offered when nothing else is legal)
   const jewelAtVulkar = state.jewel.kind === 'vulkar';
   const seen = new Set<string>();
 
-  const push = (path: string[]) => {
+  const push = (path: string[], short = false) => {
     const key = path.join('>');
     if (!seen.has(key)) {
       seen.add(key);
-      results.push(path);
+      (short ? partial : results).push(path);
     }
   };
 
@@ -59,7 +59,8 @@ export function legalPaths(state: GameState, opts: PathOptions): string[][] {
       if (visited.has(n)) continue;
       const sp = SPACE[n];
       if (sp.special === 'dock') {
-        if (me.hasJewel && !opts.penalty) {
+        // the Finish Space: no exact count needed; whoever holds the jewel on arrival wins
+        if (!opts.penalty) {
           push([...path, n]);
           extended = true;
         }
@@ -112,8 +113,8 @@ export function legalPaths(state: GameState, opts: PathOptions): string[][] {
         extended = true;
       }
     }
-    // dead end (nowhere to go): the piece stops short of the full count
-    if (!extended && path.length > 0 && !bumping) push(path);
+    // dead end (nowhere to go): the piece can only stop short if no full move exists anywhere
+    if (!extended && path.length > 0 && !bumping) push(path, true);
   };
 
   if (opts.firstStep) {
@@ -139,15 +140,11 @@ export function legalPaths(state: GameState, opts: PathOptions): string[][] {
     }
     walk(opts.from, new Set([opts.from]), opts.steps, [], false);
   }
-  return results;
+  return results.length > 0 ? results : partial;
 }
 
 export function pathEndsInCave(path: string[]): CaveNum | undefined {
   const last = path[path.length - 1];
   if (last?.startsWith(CAVE_PREFIX)) return Number(last.slice(CAVE_PREFIX.length)) as CaveNum;
   return undefined;
-}
-
-export function caveEntrySpace(n: CaveNum): string | undefined {
-  return CAVE[n].entry;
 }

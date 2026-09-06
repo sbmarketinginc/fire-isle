@@ -70,6 +70,12 @@ export class GameUI {
   private labelsOn = false;
   private logSeen = 0;
   private lastActor: PlayerId | null = null;
+  /** hot-seat: show a curtain before the first hand is revealed */
+  private curtainPending = false;
+
+  requireCurtain() {
+    this.curtainPending = true;
+  }
 
   constructor(opts: UIOptions) {
     this.root = opts.root;
@@ -107,6 +113,14 @@ export class GameUI {
     }
     // hot-seat: make sure the device is with the player who has to act
     if (this.session.kind === 'local' && !this.busy) {
+      if (this.curtainPending) {
+        this.curtainPending = false;
+        const first = this.requiredActor(view) ?? view.active;
+        this.lastActor = first;
+        this.showCurtain(view, first);
+        this.renderBottom(view, null, true);
+        return;
+      }
       const actor = this.requiredActor(view);
       if (actor !== null && actor !== view.me) {
         if (this.lastActor !== actor) {
@@ -140,8 +154,8 @@ export class GameUI {
     const el = view.me === null ? null : eligibilityForView(view);
     this.renderBottom(view, el);
     if (el && !this.busy) {
-      if (el.needsMove && view.move) this.board.showChoices(view.move.legal);
-      if (el.needsMoveBack && view.moveBack) this.board.showChoices(view.moveBack.legal);
+      if (el.needsMove && view.move) this.board.showChoices(view.move.legal, true);
+      if (el.needsMoveBack && view.moveBack) this.board.showChoices(view.moveBack.legal, true);
     }
   }
 
@@ -239,7 +253,7 @@ export class GameUI {
       const dot = el('span', 'dot');
       dot.style.background = p.color;
       c.append(dot);
-      c.append(el('span', '', `${esc(p.name)}${p.id === view.me && this.session.kind === 'net' ? ' (you)' : ''}`));
+      c.append(el('span', 'name', `${esc(p.name)}${p.id === view.me && this.session.kind === 'net' ? ' (you)' : ''}`));
       c.append(el('span', 'badge loc', esc(describeLoc(view, p.id))));
       c.append(el('span', 'badge', `🂠${p.handCount}`));
       if (p.hasJewel) c.append(el('span', 'badge jewel', '◆ jewel'));
@@ -338,9 +352,19 @@ export class GameUI {
 
   private renderBottom(view: GameView, e: ReturnType<typeof eligibilityForView> | null, hideHand = false) {
     this.bottom.innerHTML = '';
-    const status = el('div', 'status', hideHand ? `${esc(view.players[view.active].name)}'s turn.` : this.statusText(view, e));
-    this.bottom.append(status);
+    const controls = el('div', 'controls');
+    const gameOver = view.phase === 'gameOver' && view.winner !== undefined;
+    const status = el('div', 'status', gameOver ? `<b>${esc(view.players[view.winner!].name)}</b> escaped with the jewel and wins the game!` : hideHand ? `${esc(view.players[view.active].name)}'s turn.` : this.statusText(view, e));
+    controls.append(status);
     const actions = el('div', 'actions');
+    if (gameOver) {
+      const back = el('button', 'primary', 'Back to menu') as HTMLButtonElement;
+      back.onclick = () => this.onLeave();
+      actions.append(back);
+      const again = el('button', '', 'Show result') as HTMLButtonElement;
+      again.onclick = () => this.showGameOver(view);
+      actions.append(again);
+    }
     if (e && !this.busy) {
       const btn = (label: string, cls: string, fn: () => void) => {
         const b = el('button', cls, label) as HTMLButtonElement;
@@ -355,11 +379,14 @@ export class GameUI {
       if (e.canTradeToken) btn('⬢ Trade token for 4 cards', '', () => this.submit({ type: 'TRADE_TOKEN' }));
       if (e.needsFireball) btn('🔥 Aim fireball', 'primary', () => this.showFireballDialog(view));
       if (e.canPass) btn(view.phase === 'preRoll' && view.me === view.active ? 'Continue to roll' : 'Pass', e.cards.length ? '' : 'primary', () => this.submit({ type: 'PASS' }));
-      if (e.needsMove || e.needsMoveBack) btn('Overview', 'ghost', () => (this.board as unknown as { app: { overview(): void } }).app.overview());
+      if (e.needsMove || e.needsMoveBack) btn('Overview', 'ghost', () => this.board.overview());
     }
-    this.bottom.append(actions);
+    controls.append(actions);
+    this.bottom.append(controls);
     // hand
+    const wrap = el('div', 'handwrap');
     const hand = el('div', 'hand');
+    let firstPlayable: HTMLElement | null = null;
     if (view.me !== null && !hideHand) {
       for (const c of view.myHand) {
         const playable = !!e && e.cards.includes(c.uid) && !this.busy;
@@ -368,10 +395,18 @@ export class GameUI {
         card.append(el('div', '', esc(cardTitle(c))));
         card.onclick = () => this.cardTapped(view, c, playable);
         hand.append(card);
+        if (playable && !firstPlayable) firstPlayable = card;
       }
       if (view.myHand.length === 0) hand.append(el('div', 'small', 'No cards in hand — land on a dark trail space to draw.'));
     }
-    this.bottom.append(hand);
+    wrap.append(hand);
+    this.bottom.append(wrap);
+    // show a fade only when the hand actually overflows, and bring the first playable card into view
+    requestAnimationFrame(() => {
+      wrap.classList.toggle('noFade', hand.scrollWidth <= hand.clientWidth + 2);
+      firstPlayable?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      hand.addEventListener('scroll', () => wrap.classList.toggle('noFade', hand.scrollLeft + hand.clientWidth >= hand.scrollWidth - 2), { passive: true });
+    });
   }
 
   // ---------------------------------------------------------------------------

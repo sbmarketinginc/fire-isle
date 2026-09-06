@@ -10,7 +10,6 @@ export function soundEnabled() {
 }
 
 function ac(): AudioContext | null {
-  if (!enabled) return null;
   try {
     if (!ctx) ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
@@ -55,49 +54,49 @@ function tone(c: AudioContext, freq: number, dur: number, gain: number, type: Os
 
 export const sfx = {
   dice() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     for (let i = 0; i < 5; i++) setTimeout(() => noise(c, 0.06, 0.25, 2200 + Math.random() * 1500, 1.2), i * 70 + Math.random() * 30);
   },
   step() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     noise(c, 0.05, 0.12, 600, 1);
   },
   fireball() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     tone(c, 90, 1.6, 0.35, 'sawtooth', 0.4);
     noise(c, 1.4, 0.18, 300, 0.4);
   },
   hit() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     noise(c, 0.18, 0.5, 400, 0.6);
     tone(c, 160, 0.25, 0.4, 'triangle', 0.3);
   },
   jewel() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     [660, 880, 1320].forEach((f, i) => setTimeout(() => tone(c, f, 0.5, 0.18, 'sine', 1.01), i * 90));
   },
   card() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     noise(c, 0.12, 0.12, 1800, 0.5);
   },
   splash() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     noise(c, 0.5, 0.3, 900, 0.3);
   },
   win() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(c, f, 0.6, 0.2, 'triangle', 1), i * 140));
   },
   cave() {
-    const c = ac();
+    const c = enabled ? ac() : null;
     if (!c) return;
     tone(c, 220, 0.6, 0.2, 'sine', 0.5);
   },
@@ -107,11 +106,16 @@ export const sfx = {
 // ---------------------------------------------------------------------------
 // Background music
 // ---------------------------------------------------------------------------
+// The theme plays through a WebAudio gain node rather than the element's volume property:
+// iOS Safari ignores HTMLMediaElement.volume, but honours gain, so fades and ducking work there.
 
 const MUSIC_KEY = 'fireisle.music';
 let musicEl: HTMLAudioElement | null = null;
+let musicGain: GainNode | null = null;
 let musicWanted = true;
 let fadeTimer: number | null = null;
+let duckUntil = 0;
+let stopTimer: number | null = null;
 try {
   musicWanted = localStorage.getItem(MUSIC_KEY) !== 'off';
 } catch { /* ignore */ }
@@ -123,22 +127,53 @@ function musicElement(): HTMLAudioElement {
     musicEl = new Audio(new URL('./audio/fire-isle-theme.mp3', document.baseURI).href);
     musicEl.loop = true;
     musicEl.preload = 'auto';
-    musicEl.volume = 0;
+    musicEl.crossOrigin = 'anonymous';
+    const c = ac();
+    if (c) {
+      try {
+        const src = c.createMediaElementSource(musicEl);
+        musicGain = c.createGain();
+        musicGain.gain.value = 0;
+        src.connect(musicGain).connect(c.destination);
+      } catch {
+        musicGain = null;
+      }
+    }
+    if (!musicGain) musicEl.volume = 0;
   }
   return musicEl;
 }
 
-function fadeTo(target: number, ms: number, onDone?: () => void) {
-  const el = musicElement();
+function currentLevel(): number {
+  return musicGain ? musicGain.gain.value : musicEl?.volume ?? 0;
+}
+
+function setLevel(v: number) {
+  const c = ac();
+  if (musicGain && c) {
+    musicGain.gain.cancelScheduledValues(c.currentTime);
+    musicGain.gain.setValueAtTime(v, c.currentTime);
+  } else if (musicEl) {
+    musicEl.volume = v;
+  }
+}
+
+function cancelFade() {
   if (fadeTimer !== null) window.clearInterval(fadeTimer);
-  const start = el.volume;
+  fadeTimer = null;
+  if (stopTimer !== null) window.clearTimeout(stopTimer);
+  stopTimer = null;
+}
+
+function fadeTo(target: number, ms: number, onDone?: () => void) {
+  cancelFade();
+  const start = currentLevel();
   const t0 = performance.now();
   fadeTimer = window.setInterval(() => {
     const k = Math.min(1, (performance.now() - t0) / ms);
-    el.volume = start + (target - start) * k;
+    setLevel(start + (target - start) * k);
     if (k >= 1) {
-      if (fadeTimer !== null) window.clearInterval(fadeTimer);
-      fadeTimer = null;
+      cancelFade();
       onDone?.();
     }
   }, 50);
@@ -148,7 +183,13 @@ function fadeTo(target: number, ms: number, onDone?: () => void) {
 export function startMusic() {
   if (!musicWanted) return;
   const el = musicElement();
-  if (!el.paused) return;
+  const c = ac();
+  if (c && c.state === 'suspended') c.resume().catch(() => {});
+  if (!el.paused) {
+    // already playing (maybe mid fade-out): just bring the level back up
+    if (currentLevel() < MUSIC_VOLUME - 0.01) fadeTo(MUSIC_VOLUME, 1200);
+    return;
+  }
   el.play().then(() => fadeTo(MUSIC_VOLUME, 2500)).catch(() => { /* blocked until the next gesture */ });
 }
 
@@ -165,15 +206,24 @@ export function setMusicEnabled(on: boolean) {
   try {
     localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off');
   } catch { /* ignore */ }
-  if (on) startMusic();
-  else if (musicEl && !musicEl.paused) fadeTo(0, 800, () => musicEl?.pause());
+  cancelFade();
+  if (on) {
+    startMusic();
+  } else if (musicEl && !musicEl.paused) {
+    fadeTo(0, 800, () => {
+      if (!musicWanted) musicEl?.pause();
+    });
+  }
 }
 
-/** Briefly lower the music (e.g. while a fireball rolls). */
+/** Briefly lower the music (e.g. while a fireball rolls); overlapping calls extend the duck. */
 export function duckMusic(ms: number) {
-  if (!musicEl || musicEl.paused) return;
-  fadeTo(MUSIC_VOLUME * 0.35, 300);
+  if (!musicEl || musicEl.paused || !musicWanted) return;
+  const now = performance.now();
+  duckUntil = Math.max(duckUntil, now + ms);
+  if (currentLevel() > MUSIC_VOLUME * 0.35 + 0.01) fadeTo(MUSIC_VOLUME * 0.35, 300);
   window.setTimeout(() => {
+    if (performance.now() < duckUntil - 5) return; // another duck extended the deadline
     if (musicEl && !musicEl.paused && musicWanted) fadeTo(MUSIC_VOLUME, 900);
-  }, ms);
+  }, ms + 10);
 }

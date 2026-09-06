@@ -130,6 +130,7 @@ function showLocalSetup() {
 function startLocal(names: string[]) {
   const s = new LocalSession({ seed: (Math.random() * 2 ** 31) >>> 0, players: names.map((n) => ({ name: n })) });
   attachSession(s);
+  ui?.requireCurtain();
   s.setViewer(s.state.active);
 }
 

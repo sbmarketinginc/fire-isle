@@ -79,23 +79,24 @@ const SHB: SpaceDef = { id: 'SHB', x: 858, y: 176, trail: 'SHB', special: 'beach
 
 // Low Road: from the Grim Gully fork east along the north shore to Skeleton Head Beach.
 const LR = chain('LR', 'LR', [
-  [196, 135], [226, 116], [258, 104], [292, 92], [322, 90], [355, 90], [385, 94], [420, 95],
-  [455, 95], [490, 97], [523, 107], [556, 120], [588, 132], [620, 128], [652, 116], [686, 104],
-  [716, 124], [748, 134], [779, 132], [812, 140], [842, 152],
-], { 2: { dark: true }, 5: { dark: true }, 10: { rockChip: 'D' }, 12: { dark: true }, 21: { dark: true } }).map((s, i) => (i < 7 ? { ...s, safe: true } : s));
-// LR1..LR7 (the western stretch from the Grim Gully fork) are dark grey on Figure 6: fireballs do not reach them.
+  [196, 135], [219, 120], [244, 109], [269, 100], [295, 92], [322, 90], [349, 90], [376, 93],
+  [403, 95], [430, 95], [457, 95], [484, 97], [510, 103], [536, 112], [561, 122], [586, 131],
+  [613, 129], [639, 121], [664, 112], [690, 106], [712, 121], [737, 131], [764, 133], [791, 135],
+  [817, 142], [842, 152],
+], { 2: { dark: true }, 6: { dark: true }, 12: { rockChip: 'D' }, 15: { dark: true }, 26: { dark: true } }).map((s, i) => (i < 14 ? { ...s, safe: true } : s));
+// LR1..LR14 (from the Grim Gully fork past pit D's Rock Chip space) are dark grey on Figure 6: fireballs do not reach them.
 
 // Grim Gully fork (Low Road / High Road split) and gully down to Great Sway Bluff.
 const FORK: SpaceDef = { id: 'GG0', x: 173, y: 160, trail: 'GG', safe: true };
 const GG = chain('GG', 'GG', [[180, 184], [188, 208]], { 2: { dark: true } }).map((s) => ({ ...s, safe: true }));
 
 // High Road: from the fork east, parallel to the Low Road, ending at the fork above Fireflash Chute.
-// HR1..HR6 (up to cave 5) are not reached by fireballs (dark grey on Figure 6).
+// HR1..HR9 are not reached by fireballs (dark grey on Figure 6); fireball C's rollway joins the road at HR10.
 const HR = chain('HR', 'HR', [
   [206, 156], [232, 151], [260, 147], [290, 144], [318, 142], [346, 150], [369, 142], [392, 134],
   [416, 142], [440, 156], [464, 167], [490, 170], [514, 180], [538, 192], [560, 182], [582, 172],
   [596, 190],
-], { 6: { caveEntry: 5 }, 8: { dark: true }, 14: { dark: true } }).map((s, i) => (i < 6 ? { ...s, safe: true } : s));
+], { 6: { caveEntry: 5 }, 8: { dark: true }, 14: { dark: true } }).map((s, i) => (i < 9 ? { ...s, safe: true } : s));
 
 // Skeleton Head Beach trail: from the High Road fork north-east to the beach hub.
 const SB = chain('SB', 'SHB', [
@@ -111,10 +112,11 @@ const VKP: SpaceDef = { id: 'VKP', x: 540, y: 350, trail: 'VKP', safe: true, spe
 
 // Blister Run: from Vul-Kar Point south, east along the bottom of the crater, then north to the beach.
 const BR = chain('BR', 'BR', [
-  [506, 410], [509, 446], [526, 480], [556, 506], [588, 518], [618, 522], [648, 528], [680, 540],
-  [710, 540], [738, 528], [750, 500], [742, 470], [732, 440], [722, 410], [718, 378], [730, 350],
-  [752, 325], [768, 296], [778, 268], [796, 240], [818, 214], [842, 192],
-], { 7: { dark: true }, 14: { dark: true }, 19: { dark: true } });
+  [506, 410], [508, 437], [517, 463], [532, 485], [553, 503], [578, 514], [605, 520], [632, 525],
+  [658, 532], [684, 540], [712, 539], [737, 528], [748, 504], [744, 478], [736, 451], [727, 425],
+  [721, 399], [721, 372], [732, 347], [751, 327], [764, 303], [775, 277], [787, 253], [804, 231],
+  [822, 211], [842, 192],
+], { 9: { dark: true }, 17: { dark: true }, 22: { dark: true } });
 
 // Spur from Blister Run west to cave 6 (safe).
 const C6 = chain('S', 'C6', [[700, 436], [668, 428], [636, 430], [608, 446]], { 4: { caveEntry: 6 } }).map((s) => ({ ...s, safe: true }));
@@ -137,8 +139,9 @@ const VP = chain('VP', 'VP', [
 // Junction and Dock Run (north-west up to the Dock).
 const J: SpaceDef = { id: 'J', x: 244, y: 598, trail: 'DR' };
 const DR = chain('DR', 'DR', [
-  [208, 590], [178, 564], [156, 536], [141, 502], [140, 466], [139, 428], [139, 392], [140, 364],
-], { 3: { dark: true } });
+  [208, 590], [187, 572], [168, 551], [153, 529], [141, 503], [140, 475], [140, 447], [139, 420],
+  [139, 392], [140, 364],
+], { 4: { dark: true } });
 const DOCK: SpaceDef = { id: 'DOCK', x: 110, y: 358, trail: 'DOCK', safe: true, special: 'dock' };
 
 export const SPACES: SpaceDef[] = [
@@ -161,15 +164,15 @@ const ids = (arr: SpaceDef[]) => arr.map((s) => s.id);
 
 const EDGES: [string, string][] = [
   ['DMP', 'WT1'], ...seq(ids(WT)), ['WT19', 'WS'], ['WS', 'TA1'], ...seq(ids(TA)), ['TA13', 'SHB'],
-  ['SHB', 'LR21'], ...seq(ids(LR)), ['LR1', 'GG0'], ['GG0', 'HR1'], ...seq(ids(HR)),
+  ['SHB', 'LR26'], ...seq(ids(LR)), ['LR1', 'GG0'], ['GG0', 'HR1'], ...seq(ids(HR)),
   ['HR17', 'SB1'], ...seq(ids(SB)), ['SB7', 'SHB'],
   ['HR17', 'FC1'], ...seq(ids(FC)), ['FC8', 'VKP'],
-  ['VKP', 'BR1'], ...seq(ids(BR)), ['BR22', 'SHB'],
-  ['BR13', 'S1'], ...seq(ids(C6)),
+  ['VKP', 'BR1'], ...seq(ids(BR)), ['BR26', 'SHB'],
+  ['BR15', 'S1'], ...seq(ids(C6)),
   ['GG0', 'GG1'], ['GG1', 'GG2'], ['GG2', 'GSB5'], ['GSB5', 'GSB4'], ['GSB4', 'GSB3'], ['GSB3', 'GSB2'],
   ['GSB2', 'GSB1'], ['GSB1', 'W'],
   ['GSB5', 'BRIDGE1'], ['BRIDGE1', 'CP1'], ['CP1', 'CP2'], ['CP2', 'CP3'], ['CP3', 'BRIDGE2'], ['BRIDGE2', 'VP1'],
-  ...seq(ids(VP)), ['VP11', 'J'], ['J', 'DMP'], ['J', 'DR1'], ...seq(ids(DR)), ['DR8', 'DOCK'],
+  ...seq(ids(VP)), ['VP11', 'J'], ['J', 'DMP'], ['J', 'DR1'], ...seq(ids(DR)), ['DR10', 'DOCK'],
 ];
 
 export const ADJ: Record<string, string[]> = {};
@@ -196,7 +199,7 @@ export const CAVE: Record<CaveNum, CaveDef> = Object.fromEntries(CAVES.map((c) =
 
 export const PITS: PitDef[] = [
   { id: 'A', x: 470, y: 600, rockChip: 'WT5', name: 'Smolder Pit A' },
-  { id: 'B', x: 818, y: 368, rockChip: 'TA6', name: 'Smolder Pit B' },
+  { id: 'B', x: 840, y: 374, rockChip: 'TA6', name: 'Smolder Pit B' },
   { id: 'C', x: 720, y: 158, rockChip: 'SB4', name: 'Smolder Pit C' },
   { id: 'D', x: 486, y: 116, rockChip: 'LR10', name: 'Smolder Pit D' },
   { id: 'E', x: 254, y: 418, rockChip: 'VP4', name: 'Smolder Pit E' },
@@ -223,24 +226,27 @@ const range = (prefix: string, from: number, to: number): string[] => {
   return out;
 };
 
-/** Trailways and rollways from rulebook Figure 6. */
+/**
+ * Trailways and rollways from rulebook Figure 6. Each fireball rolls the way an arrow on the
+ * figure points; where a rollway reaches a junction (Skeleton Head Beach), the roller picks which
+ * trail the marble continues along.
+ */
 export const ROUTES: FireballRoute[] = [
   { id: 'A-west', fireball: 'A', label: 'Witchlord Trail toward the Plateau', spaces: range('WT', 5, 1) },
   { id: 'A-east', fireball: 'A', label: 'Witchlord Trail toward Witchlord Step', spaces: range('WT', 5, 19) },
   { id: 'B-west', fireball: 'B', label: 'Down Witchlord Trail', spaces: range('WT', 19, 1) },
   { id: 'B-north', fireball: 'B', label: 'Up Thunder Alley', spaces: range('TA', 1, 13) },
   { id: 'C-bridge', fireball: 'C', label: 'Across the Great Sway Bluff bridge', spaces: ['BRIDGE1'] },
-  { id: 'C-highroad', fireball: 'C', label: 'Down the High Road and Fireflash Chute', spaces: [...range('HR', 7, 17), ...range('FC', 1, 8)], lead: [{ x: 360, y: 215 }, { x: 400, y: 190 }] },
-  { id: 'C-lowroad', fireball: 'C', label: 'Onto the Low Road toward Skeleton Head Beach', spaces: range('LR', 8, 21), lead: [{ x: 350, y: 178 }, { x: 395, y: 122 }] },
-  { id: 'D-highroad', fireball: 'D', label: 'West along the High Road', spaces: range('HR', 17, 7), lead: [{ x: 640, y: 230 }] },
+  { id: 'C-highroad', fireball: 'C', label: 'Along the High Road and down Fireflash Chute', spaces: [...range('HR', 10, 17), ...range('FC', 1, 8)], lead: [{ x: 360, y: 215 }, { x: 420, y: 175 }] },
   { id: 'D-chute', fireball: 'D', label: 'Down Fireflash Chute toward Vul-Kar', spaces: range('FC', 1, 8), lead: [{ x: 640, y: 236 }] },
-  { id: 'D-beach', fireball: 'D', label: 'To Skeleton Head Beach and down Blister Run', spaces: [...range('SB', 1, 7), 'SHB', ...range('BR', 22, 13)], lead: [{ x: 640, y: 210 }] },
-  { id: 'D-lowroad', fireball: 'D', label: 'Up onto the Low Road toward the beach', spaces: range('LR', 14, 21), lead: [{ x: 660, y: 190 }, { x: 640, y: 150 }] },
-  { id: 'V-south', fireball: 'V', facing: 'S', label: 'Vul-Kar faces south: down Blister Run', spaces: range('BR', 1, 12), lead: [{ x: 528, y: 386 }] },
+  { id: 'D-beach-blister', fireball: 'D', label: 'To Skeleton Head Beach and down Blister Run', spaces: [...range('SB', 1, 7), 'SHB', ...range('BR', 26, 15)], lead: [{ x: 640, y: 210 }] },
+  { id: 'D-beach-lowroad', fireball: 'D', label: 'To Skeleton Head Beach and back along the Low Road', spaces: [...range('SB', 1, 7), 'SHB', ...range('LR', 26, 15)], lead: [{ x: 640, y: 210 }] },
+  { id: 'V-south', fireball: 'V', facing: 'S', label: 'Vul-Kar faces south: down Blister Run', spaces: range('BR', 1, 14), lead: [{ x: 528, y: 386 }] },
   { id: 'V-southwest', fireball: 'V', facing: 'SW', label: 'Vul-Kar faces south-west: down the lava channel to Witchlord Trail', spaces: range('WT', 5, 19), lead: [{ x: 470, y: 400 }, { x: 462, y: 460 }, { x: 478, y: 505 }] },
-  { id: 'V-west', fireball: 'V', facing: 'W', label: 'Vul-Kar faces west: over the bridge, down Viper Pass and Dock Run', spaces: ['BRIDGE2', ...range('VP', 1, 11), 'J', ...range('DR', 1, 8)], lead: [{ x: 450, y: 375 }, { x: 400, y: 360 }] },
+  { id: 'V-west', fireball: 'V', facing: 'W', label: 'Vul-Kar faces west: over the bridge, down Viper Pass and Dock Run', spaces: ['BRIDGE2', ...range('VP', 1, 11), 'J', ...range('DR', 1, 10)], lead: [{ x: 450, y: 375 }, { x: 400, y: 360 }] },
   { id: 'V-east', fireball: 'V', facing: 'E', label: 'Vul-Kar faces east: up Fireflash Chute', spaces: range('FC', 8, 1) },
-  { id: 'V-northeast', fireball: 'V', facing: 'NE', label: 'Vul-Kar faces north-east: to Skeleton Head Beach and Blister Run', spaces: [...range('SB', 1, 7), 'SHB', ...range('BR', 22, 13)], lead: [{ x: 600, y: 300 }, { x: 640, y: 262 }, { x: 640, y: 210 }] },
+  { id: 'V-northeast-blister', fireball: 'V', facing: 'NE', label: 'Vul-Kar faces north-east: to Skeleton Head Beach and down Blister Run', spaces: [...range('SB', 1, 7), 'SHB', ...range('BR', 26, 15)], lead: [{ x: 600, y: 300 }, { x: 640, y: 262 }, { x: 640, y: 210 }] },
+  { id: 'V-northeast-lowroad', fireball: 'V', facing: 'NE', label: 'Vul-Kar faces north-east: to Skeleton Head Beach and back along the Low Road', spaces: [...range('SB', 1, 7), 'SHB', ...range('LR', 26, 15)], lead: [{ x: 600, y: 300 }, { x: 640, y: 262 }, { x: 640, y: 210 }] },
 ];
 export const ROUTE: Record<string, FireballRoute> = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
 
