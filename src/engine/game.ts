@@ -83,7 +83,7 @@ export function createGame(config: GameConfig): GameState {
       return { id, v: r.value };
     });
     const max = Math.max(...rolls.map((r) => r.v));
-    log(state, events, 'rolloff', rolls.map((r) => `${players[r.id].name} rolled ${r.v}`).join(', '));
+    log(state, events, 'rolloff', `${rolls.map((r) => `${players[r.id].name} rolled ${r.v}`).join(', ')}.`);
     const top = rolls.filter((r) => r.v === max).map((r) => r.id);
     if (top.length === 1) {
       first = top[0];
@@ -421,7 +421,8 @@ function executeMove(state: GameState, events: LogEvent[], path: string[]) {
   const caveN = pathEndsInCave(path);
   const spaces = caveN ? path.slice(0, -1) : path;
   state.move!.executing = { path, index: 0, passedStep: false };
-  log(state, events, 'move', `${active.name} moves ${spaces.length} space${spaces.length === 1 ? '' : 's'} to ${describeSpace(spaces[spaces.length - 1] ?? '')}.`, state.active, { path });
+  const passed = spaces.slice(0, -1).map((id) => occupant(state, id)).filter((o): o is PlayerState => !!o && o.id !== state.active);
+  log(state, events, 'move', `${active.name} moves to ${describeSpace(spaces[spaces.length - 1] ?? '')}${passed.length ? `, past ${passed.map((o) => o.name).join(' and ')}` : ''}.`, state.active, { path });
   continueMove(state, events);
 }
 
@@ -594,7 +595,7 @@ function resolveFireball(state: GameState, events: LogEvent[]) {
   const fb = state.fireball!;
   const route = ROUTE[fb.route!];
   const roller = state.players[fb.by];
-  log(state, events, 'fireball', `${roller.name} rolls the ${FIREBALL[route.fireball].name} — ${route.label.toLowerCase()}.`, fb.by, { route: route.id, hits: fb.hits ?? [] });
+  log(state, events, 'fireball', `${roller.name} rolls the ${FIREBALL[route.fireball].name}: ${route.label}.`, fb.by, { route: route.id, hits: fb.hits ?? [] });
   for (const id of route.spaces) {
     const occ = occupant(state, id);
     if (!occ) continue;
@@ -936,7 +937,7 @@ export function applyAction(input: GameState, pid: PlayerId, action: Action): Ac
       state.fireball.route = chosen.route.id;
       state.fireball.hits = chosen.hits;
       if (chosen.route.facing) state.vulkarFacing = chosen.route.facing;
-      log(state, events, 'fireballAimed', `${p.name} aims the ${FIREBALL[chosen.route.fireball].name}: ${chosen.route.label.toLowerCase()}.`, pid, { route: chosen.route.id, hits: chosen.hits });
+      log(state, events, 'fireballAimed', `${p.name} aims the ${FIREBALL[chosen.route.fireball].name}: ${chosen.route.label}.`, pid, { route: chosen.route.id, hits: chosen.hits });
       openWindow(state, 'preFireball', events);
       return { ok: true, state, events };
     }

@@ -237,10 +237,14 @@ export function dieRotationFor(value: number): THREE.Euler {
 }
 
 export function makeHighlight(color = 0xffd54a): THREE.Mesh {
-  const geo = new THREE.RingGeometry(0.16, 0.26, 24);
+  const geo = new THREE.RingGeometry(0.2, 0.34, 28);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false });
   const m = new THREE.Mesh(geo, mat);
   m.renderOrder = 5;
+  // dark outline so the ring reads against light trail stones
+  const rim = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.42, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0a2a, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+  rim.renderOrder = 4;
+  m.add(rim);
   return m;
 }

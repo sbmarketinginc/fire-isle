@@ -22,6 +22,7 @@ button { font: inherit; color: var(--ink); background: linear-gradient(180deg, #
 button:active { transform: translateY(1px); }
 button.primary { background: linear-gradient(180deg, #ff9a1f, #e8412a); border-color: #ffd27a; color: #2a0f00; font-weight: 700; }
 button.ghost { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+button.danger { background: linear-gradient(180deg, #a8261a, #6a140c); border-color: #ff8a7a; }
 button:disabled { opacity: 0.45; cursor: default; }
 input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #8d5cc9; background: #1e1136; color: var(--ink); width: 100%; }
 
@@ -62,7 +63,7 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 
 /* overlays */
 .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 2, 14, 0.72); padding: 16px; z-index: 20; }
-.dialog { background: var(--panel2); border: 1px solid #8d5cc9; border-radius: 18px; padding: 18px; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+.dialog { background: #221440; border: 1px solid #8d5cc9; border-radius: 18px; padding: 18px; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
 .dialog h1, .dialog h2 { margin: 0 0 10px; font-family: Impact, "Arial Black", sans-serif; letter-spacing: 1px; }
 .dialog h1 { font-size: 34px; background: linear-gradient(180deg, #ffe66d, #ff9a1f 60%, #e8412a); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .dialog p { color: var(--muted); margin: 6px 0 12px; font-size: 14px; }
@@ -72,12 +73,14 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 .choice button { text-align: left; }
 .choice button small { display: block; color: var(--muted); font-weight: 400; }
 .choice button.hit { border-color: var(--accent2); }
+.choice .groupHead { font-size: 12px; color: var(--accent2); margin: 6px 0 0; letter-spacing: 0.5px; text-transform: uppercase; }
+.rulesTop { position: sticky; top: -18px; background: #221440; padding: 4px 0 8px; margin: -4px 0 6px; z-index: 1; display: flex; gap: 8px; align-items: center; }
 .list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .list .item { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 10px; font-size: 14px; }
-.log { position: absolute; right: 8px; top: calc(56px + var(--safe-top)); width: min(320px, 70vw); max-height: 40vh; overflow: auto; background: var(--panel); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 8px 10px; font-size: 12px; line-height: 1.4; z-index: 15; }
+.log { position: absolute; right: 8px; top: calc(var(--topbar-h, 56px) + 6px); width: min(320px, 70vw); max-height: 40vh; overflow: auto; background: var(--panel); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 8px 10px; font-size: 12px; line-height: 1.4; z-index: 15; }
 .log div { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 3px 0; }
 .log .me { color: var(--accent2); }
-.toast { position: absolute; left: 50%; top: calc(64px + var(--safe-top)); transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; font-size: 14px; z-index: 30; max-width: 90vw; text-align: center; animation: fade 3.4s forwards; pointer-events: none; }
+.toast { position: absolute; left: 50%; top: calc(var(--topbar-h, 64px) + 8px); transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; font-size: 14px; z-index: 30; max-width: 90vw; text-align: center; animation: fade 3.4s forwards; pointer-events: none; }
 @keyframes fade { 0% { opacity: 0; transform: translate(-50%, -8px); } 10% { opacity: 1; transform: translate(-50%, 0); } 80% { opacity: 1; } 100% { opacity: 0; } }
 .curtain { text-align: center; }
 .curtain .big { font-size: 26px; font-weight: 800; margin: 12px 0; }
@@ -99,6 +102,8 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 }
 /* landscape phones: keep the island visible by laying the controls beside the hand */
 @media (max-height: 460px) and (orientation: landscape) {
+  .overlay { justify-content: flex-end; padding-right: 5vw; }
+  .overlay .dialog { max-width: 430px; max-height: 94vh; }
   .bottom { flex-direction: row; align-items: flex-end; gap: 10px; padding-top: 4px; }
   .controls { flex: 0 1 46%; }
   .handwrap { flex: 1 1 54%; }

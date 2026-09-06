@@ -49,7 +49,7 @@ export const CARD_INFO: Record<CardType, CardInfo> = {
   },
   MOVE_BACK: {
     type: 'MOVE_BACK',
-    title: 'MOVE ANY OPPONENT BACK {n} SPACE(S)',
+    title: 'MOVE ANY OPPONENT BACK {n} {SPACES}',
     text: 'Play this card on any opponent\'s turn to move the opponent back on the trail the number of spaces indicated. Played before the opponent rolls: they move back before rolling. Played after: they finish the move, then move back. These cards do not move players out of caves, smolder pits, or the water penalty area. If this card moves an opponent back onto an unoccupied bridge, the opponent must end the move on the bridge.',
   },
   DOUBLE: {
@@ -61,8 +61,22 @@ export const CARD_INFO: Record<CardType, CardInfo> = {
 
 export function cardTitle(card: Card): string {
   const t = CARD_INFO[card.type].title;
-  return card.n !== undefined ? t.replace('{n}', String(card.n)) : t;
+  return card.n !== undefined ? t.replace('{n}', String(card.n)).replace('{SPACES}', card.n === 1 ? 'SPACE' : 'SPACES') : t;
 }
+
+/** When a card may be played, in plain words (shown when a card is tapped at the wrong moment). */
+export const CARD_TIMING: Record<CardType, string> = {
+  FIREBALL: 'Playable before a roll, after a roll, after a move, at the end of a turn, or while a steal or cave roll is being resolved — not while someone is picking a path or aiming a fireball.',
+  FAKE_JEWEL: 'Playable only when an opponent tries to steal the jewel from you.',
+  CANCEL: 'Playable right after another player plays a card, before it takes effect.',
+  TALISMAN: 'Playable when a fireball is about to be rolled (by you only if your piece is a target).',
+  REROLL: 'Playable right after a die roll, before the player moves.',
+  EXTRA_TURN: 'Playable at the end of your own turn.',
+  TAKE_CARD: 'Playable before a roll, after a roll, after a move, at the end of a turn, or during a steal or cave roll — and only against an opponent who holds cards and is not protected by jewel and token.',
+  MOVE_AHEAD: 'Playable when it is time to roll on your own turn, or before an opponent rolls on theirs.',
+  MOVE_BACK: "Playable on an opponent's turn: before their roll, after their roll, after their move, or at the end of their turn.",
+  DOUBLE: 'Playable before a roll, after a roll, after a move, at the end of a turn, or during a steal or cave roll, when no double is already pending.',
+};
 
 export function cardText(card: Card): string {
   return CARD_INFO[card.type].text;

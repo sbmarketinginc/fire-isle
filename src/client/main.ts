@@ -27,11 +27,14 @@ let session: Session | null = null;
 let ui: GameUI | null = null;
 let queue: Promise<void> = Promise.resolve();
 
-function overlay(html: string): HTMLElement {
+function overlay(html: string, closeOnBackdrop = false): HTMLElement {
   const ov = el('div', 'overlay');
   const d = el('div', 'dialog');
   d.innerHTML = html;
   ov.append(d);
+  if (closeOnBackdrop) ov.addEventListener('click', (ev) => {
+    if (ev.target === ov) ov.remove();
+  });
   uiRoot.append(ov);
   return ov;
 }
@@ -67,8 +70,17 @@ function showMenu() {
     showOnlineSetup();
   });
   ov.querySelector('#btnRules')!.addEventListener('click', () => {
-    const r = overlay(`<h2>How to play</h2>${rulesHtml()}<div class="row"><button class="primary" style="flex:1">Close</button></div>`);
-    r.querySelector('button')!.addEventListener('click', () => r.remove());
+    ov.hidden = true;
+    const r = overlay(`<div class="rulesTop"><h2 style="margin:0;flex:1">How to play</h2><button class="ghost" id="closeTop">Close</button></div>${rulesHtml()}<div class="row"><button class="primary" id="closeBottom" style="flex:1">Close</button></div>`, true);
+    const close = () => {
+      r.remove();
+      ov.hidden = false;
+    };
+    r.querySelector('#closeTop')!.addEventListener('click', close);
+    r.querySelector('#closeBottom')!.addEventListener('click', close);
+    r.addEventListener('click', (ev) => {
+      if (ev.target === r) ov.hidden = false;
+    });
   });
 }
 
@@ -84,12 +96,13 @@ function showLocalSetup() {
       const sw = el('div', 'swatch');
       sw.style.background = PLAYER_COLORS[i];
       const input = el('input') as HTMLInputElement;
-      input.placeholder = `${PLAYER_COLOR_NAMES[i]} explorer`;
+      input.placeholder = PLAYER_COLOR_NAMES[i];
+      input.setAttribute('aria-label', `${PLAYER_COLOR_NAMES[i]} player's name`);
       input.value = (d.dataset[`name${i}`] as string) || '';
       input.maxLength = 16;
       input.oninput = () => (d.dataset[`name${i}`] = input.value);
       input.className = 'nameInput';
-      row.append(sw, input, el('span', 'small', PLAYER_COLOR_NAMES[i]));
+      row.append(sw, input, el('span', 'small', 'name'));
       rows.append(row);
     }
     d.append(rows);
@@ -140,7 +153,7 @@ function showOnlineSetup() {
     <p>Create a game and share the code, or join a friend's game. Everyone needs to reach the same Fire Isle server.</p>
     <input id="name" placeholder="Your name" maxlength="16" />
     <div class="row" style="margin-top:10px"><button class="primary" id="create" style="flex:1">Create game</button></div>
-    <div class="row"><input id="code" placeholder="Game code" maxlength="5" style="text-transform:uppercase" /><button id="join">Join</button></div>
+    <div class="row"><input id="code" placeholder="Game code" maxlength="5" autocapitalize="characters" /><button id="join">Join</button></div>
     <div class="row"><button class="ghost" id="back" style="flex:1">Back</button></div>
     <p class="small" id="err"></p>`);
   const name = ov.querySelector('#name') as HTMLInputElement;
@@ -151,7 +164,7 @@ function showOnlineSetup() {
   const connect = async () => {
     const url = defaultServerUrl();
     if (!url) {
-      err.textContent = 'Online play is not available on this static site yet — use Pass & Play here, or host the Fire Isle server (see README).';
+      err.textContent = 'Online play needs a Fire Isle game server, and this site does not have one yet. Pass & Play works here on one phone.';
       return null;
     }
     const net = new NetSession(url);
@@ -170,13 +183,15 @@ function showOnlineSetup() {
   ov.querySelector('#create')!.addEventListener('click', async () => {
     const net = await connect();
     if (!net) return;
-    net.create(name.value.trim() || 'Host');
+    net.create(name.value.trim() || 'Explorer');
     ov.remove();
     showLobby(net);
   });
+  const codeInput = ov.querySelector('#code') as HTMLInputElement;
+  codeInput.addEventListener('input', () => (codeInput.value = codeInput.value.toUpperCase()));
   ov.querySelector('#join')!.addEventListener('click', async () => {
-    const code = (ov.querySelector('#code') as HTMLInputElement).value.trim().toUpperCase();
-    if (code.length < 4) {
+    const code = codeInput.value.trim().toUpperCase();
+    if (code.length !== 5) {
       err.textContent = 'Enter the 5-letter game code.';
       return;
     }

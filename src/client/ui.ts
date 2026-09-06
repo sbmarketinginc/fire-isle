@@ -1,6 +1,6 @@
 // HTML overlay: player chips, status, actions, hand, dialogs, hot-seat curtain, log.
 import {
-  CAVE, CARD_INFO, FIREBALL, PIT, ROUTE, SPACE, TRAIL_NAMES, availableRoutesForView, cardText, cardTitle,
+  CAVE, CARD_INFO, CARD_TIMING, FIREBALL, PIT, ROUTE, SPACE, TRAIL_NAMES, availableRoutesForView, cardText, cardTitle,
   eligibilityForView, isReactiveWindow, isWindowPhase,
 } from '../engine/index.ts';
 import type { Action, Card, GameView, LogEvent, PlayerId } from '../engine/index.ts';
@@ -40,8 +40,13 @@ export function describeLoc(view: GameView, pid: PlayerId): string {
     return TRAIL_NAMES[s.trail];
   }
   if (loc.kind === 'cave') return `Cave ${loc.n}`;
-  if (loc.kind === 'pit') return `${PIT[loc.pit].name}${loc.down ? ' (down)' : ''}`;
+  if (loc.kind === 'pit') return `${PIT[loc.pit].name}${loc.down ? ' (lying down)' : ''}`;
   return 'the water';
+}
+
+function pathNotes(view: GameView, path: string[]): string {
+  const passed = path.filter((id) => !id.startsWith(CAVE_PREFIX)).slice(0, -1).map((id) => view.players.find((p) => p.loc.kind === 'space' && p.loc.id === id && p.id !== view.me)).filter((p): p is GameView['players'][number] => !!p);
+  return passed.length ? `passes ${passed.map((p) => p.name).join(' and ')}` : '';
 }
 
 function pathSummary(path: string[]): string {
@@ -132,13 +137,28 @@ export class GameUI {
       }
       if (isWindowPhase(view.phase)) {
         const mine = view.me === null ? null : eligibilityForView(view);
-        // the device holder has nothing to play in a reactive window: pass quietly (their hand is their own)
         if (mine && mine.canPass && mine.cards.length === 0 && isReactiveWindow(view.phase)) {
+          const top = view.cardStack[view.cardStack.length - 1];
+          const ownCardResponse = view.phase === 'cardResponse' && top?.player === view.me;
+          if (view.myHand.length === 0 || ownCardResponse) {
+            // nothing hidden to protect (no cards, or answering one's own card): pass quietly
+            this.renderBottom(view, null, true);
+            void this.session.submit({ type: 'PASS' }, view.me as PlayerId);
+            return;
+          }
+          // holding cards but none apply: show the same one-tap screen a player with an option sees
           this.renderBottom(view, null, true);
-          void this.session.submit({ type: 'PASS' }, view.me as PlayerId);
+          this.showNothingToPlay(view);
           return;
         }
-        const others = this.otherResponders(view);
+        let others = this.otherResponders(view);
+        // Keep the table moving: the routine "anyone?" prompt only comes before a roll and after a
+        // move. After a roll it is asked only when a REROLL is in someone's hand, and the end-of-turn
+        // window is skipped (any-time cards get their chance again a moment later, before the next roll).
+        if (view.phase === 'postTurn' || (view.phase === 'postRoll' && !others.some((o) => this.guessHand(view, o.pid).some((c) => c.type === 'REROLL')))) {
+          for (const o of others) if (o.canPass) void this.session.submit({ type: 'PASS' }, o.pid);
+          others = [];
+        }
         if ((!mine || !mine.canPass) && others.length > 0) {
           this.renderBottom(view, null, true);
           this.showResponsePrompt(view, others);
@@ -225,6 +245,27 @@ export class GameUI {
     this.overlayEl = ov;
   }
 
+  private showNothingToPlay(view: GameView) {
+    this.closeOverlay();
+    const ov = el('div', 'overlay');
+    ov.style.background = 'rgba(6,2,14,0.35)';
+    ov.style.alignItems = 'flex-end';
+    const d = el('div', 'dialog');
+    d.append(el('h2', '', esc(view.players[view.me!].name)));
+    d.append(el('p', '', esc(this.windowPromptText(view))));
+    d.append(el('p', 'small', 'None of your cards can be played at this moment.'));
+    const b = el('button', 'primary', 'Pass') as HTMLButtonElement;
+    b.style.width = '100%';
+    b.onclick = () => {
+      this.closeOverlay();
+      void this.session.submit({ type: 'PASS' }, view.me as PlayerId);
+    };
+    d.append(b);
+    ov.append(d);
+    this.root.append(ov);
+    this.overlayEl = ov;
+  }
+
   private windowPromptText(view: GameView): string {
     const name = (pid: PlayerId) => view.players[pid].name;
     switch (view.phase) {
@@ -263,31 +304,35 @@ export class GameUI {
       chips.append(c);
     }
     this.top.append(chips);
-    const logBtn = el('button', 'iconbtn ghost', '📜') as HTMLButtonElement;
-    logBtn.onclick = () => {
+    const toggle = (label: string, glyph: string, on: () => boolean, flip: () => void) => {
+      const b = el('button', `iconbtn ghost${on() ? '' : ' off'}`, glyph) as HTMLButtonElement;
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.setAttribute('aria-pressed', String(on()));
+      b.onclick = () => {
+        flip();
+        b.classList.toggle('off', !on());
+        b.setAttribute('aria-pressed', String(on()));
+      };
+      return b;
+    };
+    const logBtn = toggle('Game log', '📜', () => this.logOpen, () => {
       this.logOpen = !this.logOpen;
       this.logEl.style.display = this.logOpen ? 'block' : 'none';
-    };
-    const labelBtn = el('button', 'iconbtn ghost', '🏷') as HTMLButtonElement;
-    labelBtn.onclick = () => {
+    });
+    const labelBtn = toggle('Trail names', '🏷', () => this.labelsOn, () => {
       this.labelsOn = !this.labelsOn;
       this.board.labelMesh.visible = this.labelsOn;
-    };
-    const sndBtn = el('button', 'iconbtn ghost', soundEnabled() ? '🔊' : '🔇') as HTMLButtonElement;
-    sndBtn.title = 'Sound effects';
-    sndBtn.onclick = () => {
-      setSoundEnabled(!soundEnabled());
-      sndBtn.textContent = soundEnabled() ? '🔊' : '🔇';
-    };
-    const musicBtn = el('button', `iconbtn ghost${musicEnabled() ? '' : ' off'}`, '🎵') as HTMLButtonElement;
-    musicBtn.title = 'Music';
-    musicBtn.onclick = () => {
-      setMusicEnabled(!musicEnabled());
-      musicBtn.classList.toggle('off', !musicEnabled());
-    };
+    });
+    const sndBtn = toggle('Sound effects', '🔊', soundEnabled, () => setSoundEnabled(!soundEnabled()));
+    const musicBtn = toggle('Music', '🎵', musicEnabled, () => setMusicEnabled(!musicEnabled()));
     const menuBtn = el('button', 'iconbtn ghost', '☰') as HTMLButtonElement;
+    menuBtn.title = 'Game menu';
+    menuBtn.setAttribute('aria-label', 'Game menu');
     menuBtn.onclick = () => this.showMenu();
     this.top.append(logBtn, labelBtn, sndBtn, musicBtn, menuBtn);
+    // keep the log and toasts below the chips, whatever height the bar takes
+    requestAnimationFrame(() => this.root.style.setProperty('--topbar-h', `${this.top.offsetHeight}px`));
   }
 
   private renderLog(log: LogEvent[]) {
@@ -309,7 +354,7 @@ export class GameUI {
     switch (ph) {
       case 'preRoll':
         if (view.forcedSteps) return `<b>${name(view.active)}</b> must move ahead ${view.forcedSteps} instead of rolling. ${e.cards.length ? 'Play a card or pass.' : 'Pass to continue.'}`;
-        return meActive ? `<b>Your turn.</b> ${e.cards.length ? 'Play a card now, or continue to roll.' : 'Continue to roll the die.'}` : `<b>${name(view.active)}</b>'s turn is starting. ${e.cards.length ? 'Play a card before the roll, or pass.' : 'Pass.'}`;
+        return meActive ? `<b>Your turn.</b> ${e.cards.length ? 'Play a card now, or continue.' : 'Continue to roll the die.'}` : `<b>${name(view.active)}</b>'s turn is starting. ${e.cards.length ? 'Play a card before the roll, or pass.' : 'Pass.'}`;
       case 'awaitRoll':
         if (!meActive) return `Waiting for <b>${name(view.active)}</b> to roll.`;
         if (active.loc.kind === 'cave') {
@@ -318,7 +363,7 @@ export class GameUI {
         }
         if (active.loc.kind === 'pit') return `<b>Roll</b> to climb out of the smolder pit onto the Rock Chip space.`;
         if (active.loc.kind === 'water') return `<b>Roll</b> to climb the 5 spaces of Great Sway Bluff.`;
-        return `<b>Roll the die.</b>${e.canTradeToken ? ' You may trade your Magic Charm token for a full hand first.' : ''}`;
+        return `<b>Roll the die.</b>${e.cards.length ? ' Or play a card first.' : ''}${e.canTradeToken ? ' You may trade your Magic Charm token for a full hand first.' : ''}`;
       case 'postRoll':
         return `<b>${name(view.active)}</b> rolled <span class="dieface">${view.lastRoll}</span>${view.lastRollRaw !== view.lastRoll ? ' (doubled)' : ''}. ${e.cards.length ? 'Play a card or pass.' : 'Pass to continue.'}`;
       case 'awaitMove':
@@ -329,7 +374,7 @@ export class GameUI {
       case 'preFireball': {
         const r = view.fireball?.route ? ROUTE[view.fireball.route] : null;
         const hits = (view.fireball?.hits ?? []).map((h) => name(h)).join(', ');
-        return `<b>${name(view.fireball!.by)}</b> aims the ${r ? FIREBALL[r.fireball].name : 'fireball'}: ${r ? esc(r.label.toLowerCase()) : ''}. ${hits ? `Targets: ${hits}.` : 'No one is in the way.'} ${e.cards.length ? 'Play MAGIC TALISMAN or pass.' : 'Pass.'}`;
+        return `<b>${name(view.fireball!.by)}</b> aims the ${r ? FIREBALL[r.fireball].name : 'fireball'}: ${r ? esc(r.label) : ''}. ${hits ? `Targets: ${hits}.` : 'No one is in the way.'} ${e.cards.length ? 'Play MAGIC TALISMAN or pass.' : 'Pass.'}`;
       }
       case 'stealAttempt':
         return `<b>${name(view.steal!.thief)}</b> reaches for <b>${name(view.steal!.owner)}</b>'s jewel! ${e.cards.length ? 'Play FAKE JEWEL or pass.' : 'Pass.'}`;
@@ -376,9 +421,9 @@ export class GameUI {
         btn('Try another cave', '', () => this.submit({ type: 'DECLARE_CAVE', choice: 'newCave' }));
       }
       if (e.canRoll) btn('🎲 Roll', 'primary', () => this.submit({ type: 'ROLL' }));
-      if (e.canTradeToken) btn('⬢ Trade token for 4 cards', '', () => this.submit({ type: 'TRADE_TOKEN' }));
+      if (e.canTradeToken) btn('⬢ Trade token: fill hand to 4', '', () => this.submit({ type: 'TRADE_TOKEN' }));
       if (e.needsFireball) btn('🔥 Aim fireball', 'primary', () => this.showFireballDialog(view));
-      if (e.canPass) btn(view.phase === 'preRoll' && view.me === view.active ? 'Continue to roll' : 'Pass', e.cards.length ? '' : 'primary', () => this.submit({ type: 'PASS' }));
+      if (e.canPass) btn(view.phase === 'preRoll' && view.me === view.active ? 'Continue' : 'Pass', e.cards.length ? '' : 'primary', () => this.submit({ type: 'PASS' }));
       if (e.needsMove || e.needsMoveBack) btn('Overview', 'ghost', () => this.board.overview());
     }
     controls.append(actions);
@@ -427,7 +472,7 @@ export class GameUI {
     const alternatives = this.board.choicesFor(path[path.length - 1]);
     const go = (p: string[]) => this.submit(el.needsMoveBack ? { type: 'CHOOSE_MOVE_BACK', path: p } : { type: 'MOVE', path: p });
     if (alternatives.length > 1) {
-      this.showChoiceDialog('Which way?', alternatives.map((p) => ({ label: pathSummary(p), sub: `${p.filter((s) => !s.startsWith(CAVE_PREFIX)).length} spaces`, fn: () => go(p) })));
+      this.showChoiceDialog('Which way?', alternatives.map((p) => ({ label: pathSummary(p), sub: pathNotes(v, p), fn: () => go(p) })));
       return;
     }
     go(path);
@@ -436,7 +481,7 @@ export class GameUI {
   private cardTapped(view: GameView, card: Card, playable: boolean) {
     const info = CARD_INFO[card.type];
     if (!playable) {
-      this.showDialog(cardTitle(card), `<p>${esc(cardText(card))}</p><p class="small">${this.busy ? 'Wait for the action to finish.' : 'This card cannot be played right now.'}</p>`, [{ label: 'Close' }]);
+      this.showDialog(cardTitle(card), `<p>${esc(cardText(card))}</p><p class="small"><b>Not playable at this moment.</b> ${esc(CARD_TIMING[card.type])}</p>`, [{ label: 'Close' }]);
       return;
     }
     const play = (target?: PlayerId) => this.submit({ type: 'PLAY_CARD', uid: card.uid, target });
@@ -448,10 +493,10 @@ export class GameUI {
     let extra = '';
     if (card.type === 'FIREBALL') {
       const routes = availableRoutesForView(view);
-      const lines = routes.map((r) => `<li>${esc(FIREBALL[r.route.fireball].name)}: ${esc(r.route.label.toLowerCase())} — ${r.hits.length ? `hits ${r.hits.map((h) => (h === view.me ? 'you' : esc(view.players[h].name))).join(', ')}` : 'hits nobody'}</li>`);
+      const lines = routes.map((r) => `<li>${esc(FIREBALL[r.route.fireball].name)}: ${esc(r.route.label)} — ${r.hits.length ? `hits ${r.hits.map((h) => (h === view.me ? 'you' : esc(view.players[h].name))).join(', ')}` : 'hits nobody'}</li>`);
       extra = `<p><b>Rolls you could choose right now:</b></p><ul class="small" style="margin:0 0 8px 18px;padding:0">${lines.join('')}</ul><p class="small">${routes.every((r) => r.hits.length > 0) ? 'The fireball must hit a target when it can.' : ''}</p>`;
     }
-    if (card.type === 'MOVE_BACK') extra = `<p>${esc(view.players[view.active].name)} will be moved back ${card.n} and you choose where.</p>`;
+    if (card.type === 'MOVE_BACK') extra = `<p>${esc(view.players[view.active].name)} will be moved back ${card.n} space${card.n === 1 ? '' : 's'}, and you choose where.</p>`;
     if (card.type === 'MOVE_AHEAD' && view.me !== view.active) extra = `<p>${esc(view.players[view.active].name)} will be forced to move ahead ${card.n} instead of rolling.</p>`;
     this.showDialog(cardTitle(card), `<p>${esc(cardText(card))}</p>${extra}`, [
       { label: 'Play it', primary: true, fn: () => play(card.type === 'MOVE_AHEAD' || card.type === 'MOVE_BACK' ? view.active : undefined) },
@@ -461,14 +506,23 @@ export class GameUI {
 
   private showFireballDialog(view: GameView) {
     const routes = availableRoutesForView(view);
-    const items = routes.map((r) => ({
-      label: `${FIREBALL[r.route.fireball].name}: ${r.route.label}`,
-      sub: r.hits.length ? `Hits ${r.hits.map((h) => (h === view.me ? 'you' : view.players[h].name)).join(', ')}` : 'Hits nobody',
-      hit: r.hits.length > 0,
-      fn: () => this.submit({ type: 'CHOOSE_FIREBALL', route: r.route.id }),
-    }));
-    const note = routes.every((r) => r.hits.length > 0) ? 'The fireball must hit a target when it can.' : 'No piece can be hit — choose any trailway.';
-    this.showChoiceDialog('Roll a Fireball', items, note);
+    const order: Record<string, number> = { V: 0, A: 1, B: 2, C: 3, D: 4 };
+    const sorted = routes.slice().sort((a, b) => (b.hits.length > 0 ? 1 : 0) - (a.hits.length > 0 ? 1 : 0) || order[a.route.fireball] - order[b.route.fireball]);
+    let lastGroup = '';
+    const items = sorted.map((r) => {
+      const group = FIREBALL[r.route.fireball].name;
+      const header = group !== lastGroup ? group : '';
+      lastGroup = group;
+      return {
+        label: r.route.label.replace(/^Vul-Kar faces [a-z-]+: /, (m) => m.replace('Vul-Kar faces ', 'Face ').replace(': ', ' — ')),
+        sub: r.hits.length ? `Hits ${r.hits.map((h) => (h === view.me ? 'you' : view.players[h].name)).join(', ')}` : 'Hits nobody',
+        hit: r.hits.length > 0,
+        header,
+        fn: () => this.submit({ type: 'CHOOSE_FIREBALL', route: r.route.id }),
+      };
+    });
+    const note = routes.every((r) => r.hits.length > 0) ? 'The fireball must hit a target when it can.' : 'No piece can be hit — push any fireball down any trailway.';
+    this.showChoiceDialog('Roll a Fireball', items, note, false);
   }
 
   // ---------------------------------------------------------------------------
@@ -480,15 +534,18 @@ export class GameUI {
     this.overlayEl = null;
   }
 
-  showDialog(title: string, html: string, buttons: { label: string; primary?: boolean; fn?: () => void }[]) {
+  showDialog(title: string, html: string, buttons: { label: string; primary?: boolean; danger?: boolean; fn?: () => void }[]) {
     this.closeOverlay();
     const ov = el('div', 'overlay');
+    ov.addEventListener('click', (ev) => {
+      if (ev.target === ov) this.closeOverlay();
+    });
     const d = el('div', 'dialog');
     d.append(el('h2', '', esc(title)));
     d.append(el('div', '', html));
     const row = el('div', 'row');
     for (const b of buttons) {
-      const btn = el('button', b.primary ? 'primary' : '', esc(b.label)) as HTMLButtonElement;
+      const btn = el('button', b.primary ? 'primary' : b.danger ? 'danger' : '', esc(b.label)) as HTMLButtonElement;
       btn.style.flex = '1';
       btn.onclick = () => {
         this.closeOverlay();
@@ -502,7 +559,7 @@ export class GameUI {
     this.overlayEl = ov;
   }
 
-  showChoiceDialog(title: string, items: { label: string; sub?: string; hit?: boolean; fn: () => void }[], note?: string) {
+  showChoiceDialog(title: string, items: { label: string; sub?: string; hit?: boolean; header?: string; fn: () => void }[], note?: string, cancelable = true) {
     this.closeOverlay();
     const ov = el('div', 'overlay');
     const d = el('div', 'dialog');
@@ -510,7 +567,8 @@ export class GameUI {
     if (note) d.append(el('p', '', esc(note)));
     const list = el('div', 'choice');
     for (const it of items) {
-      const b = el('button', it.hit ? 'hit' : '', `${it.label}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}`) as HTMLButtonElement;
+      if (it.header) list.append(el('div', 'groupHead', esc(it.header)));
+      const b = el('button', it.hit ? 'hit' : '', `${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}`) as HTMLButtonElement;
       b.onclick = () => {
         this.closeOverlay();
         it.fn();
@@ -518,10 +576,15 @@ export class GameUI {
       list.append(b);
     }
     d.append(list);
-    const cancel = el('button', 'ghost', 'Cancel') as HTMLButtonElement;
-    cancel.style.marginTop = '10px';
-    cancel.onclick = () => this.closeOverlay();
-    d.append(cancel);
+    if (cancelable) {
+      const cancel = el('button', 'ghost', 'Never mind') as HTMLButtonElement;
+      cancel.style.marginTop = '10px';
+      cancel.onclick = () => this.closeOverlay();
+      d.append(cancel);
+      ov.addEventListener('click', (ev) => {
+        if (ev.target === ov) this.closeOverlay();
+      });
+    }
     ov.append(d);
     this.root.append(ov);
     this.overlayEl = ov;
@@ -539,8 +602,12 @@ export class GameUI {
     sw.style.height = '48px';
     d.append(sw);
     d.append(el('div', 'big', `Pass the device to ${esc(p.name)}`));
-    const why = view.phase === 'awaitRoll' || view.phase === 'awaitMove' ? `It's ${esc(p.name)}'s turn.` : view.phase === 'chooseFireball' ? `${esc(p.name)} must roll a fireball.` : `${esc(p.name)} may play a card now.`;
+    const why = actor === view.active && (view.phase === 'preRoll' || view.phase === 'awaitRoll' || view.phase === 'awaitMove') ? `It's ${esc(p.name)}'s turn.` : view.phase === 'chooseFireball' ? `${esc(p.name)} must roll a fireball.` : view.phase === 'chooseMoveBackPath' ? `${esc(p.name)} chooses where the piece moves back to.` : `${esc(p.name)} may play a card now.`;
     d.append(el('p', '', why));
+    if (view.turn <= 1) {
+      const rolloff = view.log.filter((e) => e.type === 'rolloff' || e.type === 'first').map((e) => esc(e.text)).join(' ');
+      if (rolloff) d.append(el('p', 'small', `Roll for first player: ${rolloff}`));
+    }
     const b = el('button', 'primary', `I'm ${esc(p.name)}`) as HTMLButtonElement;
     b.style.width = '100%';
     b.onclick = () => {
@@ -556,7 +623,7 @@ export class GameUI {
   private showGameOver(view: GameView) {
     if (view.winner === undefined) return;
     const w = view.players[view.winner];
-    this.showDialog('Fire Isle', `<div class="curtain"><div class="big" style="color:${w.color}">${esc(w.name)} escapes with the jewel!</div><p>The jewel of Vul-Kar has left the island. The game is over.</p></div>`, [
+    this.showDialog(`${w.name} wins!`, `<div class="curtain"><div class="big" style="color:${w.color}">${esc(w.name)} escapes with the jewel!</div><p>The jewel of Vul-Kar has left the island. The game is over.</p></div>`, [
       { label: 'Back to menu', primary: true, fn: () => this.onLeave() },
       { label: 'Look at the board' },
     ]);
@@ -565,10 +632,10 @@ export class GameUI {
   private showMenu() {
     const v = this.view;
     const code = (this.session as unknown as { code?: string }).code;
-    this.showDialog('Fire Isle', `<p>${code ? `Game code: <b>${esc(code)}</b><br/>` : ''}Turn ${v?.turn ?? 0}.</p><p class="small">Leaving abandons the game for this device.</p>`, [
+    this.showDialog('Game menu', `<p>${code ? `Game code: <b>${esc(code)}</b><br/>` : ''}Turn ${v?.turn ?? 0}.</p>`, [
       { label: 'Keep playing', primary: true },
       { label: 'How to play', fn: () => showRules(this) },
-      { label: 'Leave game', fn: () => this.onLeave() },
+      { label: 'Leave game', danger: true, fn: () => this.showDialog('Leave the game?', '<p>This abandons the game on this device; there is no save.</p>', [{ label: 'Keep playing', primary: true }, { label: 'Leave', danger: true, fn: () => this.onLeave() }]) },
     ]);
   }
 }

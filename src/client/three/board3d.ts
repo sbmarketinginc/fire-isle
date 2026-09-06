@@ -144,12 +144,18 @@ export class Board3D {
       const others = view.players.filter((o) => o.loc.kind === 'space' && o.loc.id === loc.id);
       const idx = others.findIndex((o) => o.id === pid);
       const pos = this.spacePoint(loc.id, 0.02);
-      if (others.length > 1) pos.add(new THREE.Vector3(Math.cos(idx * 2.1) * 0.22, 0, Math.sin(idx * 2.1) * 0.22));
+      if (others.length > 1) {
+        // fan the pieces evenly around the space so none hides behind another
+        const r = SPACE[loc.id].special === 'start' ? 0.34 : 0.24;
+        const a = (idx / others.length) * Math.PI * 2 + Math.PI / 4;
+        pos.add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      }
       return { pos, lying: false, sunk: false };
     }
     if (loc.kind === 'cave') {
+      // stand at the cave mouth, half-size, so the piece stays visible from above
       const c = CAVE[loc.n];
-      return { pos: surfacePoint(c.x, c.y, -0.12), lying: false, sunk: true };
+      return { pos: surfacePoint(c.x, c.y, 0.02), lying: false, sunk: true };
     }
     if (loc.kind === 'pit') {
       const pit = PIT[loc.pit];
@@ -177,7 +183,7 @@ export class Board3D {
       const lp = this.locationPoint(view, p.id);
       g.position.copy(lp.pos);
       g.rotation.set(lp.lying ? Math.PI / 2 : 0, g.rotation.y, 0);
-      g.scale.setScalar(lp.sunk ? 0.8 : 1);
+      g.scale.setScalar(lp.sunk ? 0.62 : 1);
     }
     this.syncJewel(view);
     this.syncTokens(view);
@@ -195,7 +201,7 @@ export class Board3D {
     } else {
       const g = this.pieces.get(j.player);
       if (g) {
-        this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 1.15, 0));
+        this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 0.92, 0));
         this.jewel.visible = true;
       }
     }
@@ -230,7 +236,7 @@ export class Board3D {
     this.jewel.rotation.y += dt * 1.2;
     if (this.view?.jewel.kind === 'player' && !this.animating) {
       const g = this.pieces.get(this.view.jewel.player);
-      if (g) this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 1.15 + Math.sin(t * 3) * 0.05, 0));
+      if (g) this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 0.92 + Math.sin(t * 3) * 0.03, 0));
     }
     // eye glow pulse
     for (const h of this.highlights) {
@@ -297,7 +303,7 @@ export class Board3D {
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       const dt = performance.now() - down.t;
       down = null;
-      if (moved > 10 || dt > 600 || this.highlights.length === 0) return;
+      if (moved > 12 || dt > 1000 || this.highlights.length === 0) return;
       const hit = this.app.pick(e.clientX, e.clientY, this.highlights);
       if (hit) {
         const ps = this.choiceMap.get(hit.object as THREE.Mesh);
@@ -441,7 +447,7 @@ export class Board3D {
       this.app.focusOn(to.clone());
     }
     if (this.view && finalView.jewel.kind === 'player' && finalView.jewel.player === pid) {
-      this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 1.15, 0));
+      this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 0.92, 0));
     }
     this.view = finalView;
   }
@@ -450,10 +456,11 @@ export class Board3D {
     const g = this.pieces.get(pid);
     if (!g) return;
     const lp = this.locationPoint(finalView, pid);
+    this.app.focusOn(lp.pos.clone(), 9);
     const above = lp.pos.clone().add(new THREE.Vector3(0, 1.2, 0));
     await this.tween(g, above, fast ? 80 : 350, 0.1);
     await this.tween(g, lp.pos, fast ? 80 : 350, 0);
-    g.scale.setScalar(0.8);
+    g.scale.setScalar(0.62);
   }
 
   private async animateKnock(pid: PlayerId, finalView: GameView, fast: boolean) {
