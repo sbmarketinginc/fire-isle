@@ -1,5 +1,7 @@
 // 3D models for the game pieces, built from primitives so the game needs no binary assets.
 import * as THREE from 'three';
+import { CAVES, FIREBALLS, PITS, RUIN, SPACE } from '../../engine/board.ts';
+import { surfacePoint } from './terrain.ts';
 
 const black = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35, metalness: 0.15 });
 
@@ -340,5 +342,194 @@ export function makeHighlight(color = 0xffd54a): THREE.Mesh {
   const rim = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.42, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1a0a2a, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
   rim.renderOrder = 4;
   m.add(rim);
+  return m;
+}
+
+
+/** Physical landmarks: the pier, the Ruin, cave mouths, smolder pits, Dead Man's stump, marble sockets. */
+export function makeLandmarks(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x7a4f28, roughness: 0.85 });
+  const darkWood = new THREE.MeshStandardMaterial({ color: 0x4a2e14, roughness: 0.9 });
+  const stone = new THREE.MeshStandardMaterial({ color: 0xb59a62, roughness: 0.95 });
+  const hole = new THREE.MeshStandardMaterial({ color: 0x05040a, roughness: 1 });
+  const rim = new THREE.MeshStandardMaterial({ color: 0x1c1830, roughness: 0.95 });
+
+  // The Dock: a plank pier on posts reaching out over the water
+  {
+    const dock = surfacePoint(SPACE.DOCK.x, SPACE.DOCK.y, 0);
+    const shore = surfacePoint(SPACE.DR10.x, SPACE.DR10.y, 0);
+    const dir = new THREE.Vector3().subVectors(dock, shore).setY(0);
+    const len = dir.length() + 0.9;
+    const yaw = Math.atan2(dir.x, dir.z);
+    const pier = new THREE.Group();
+    pier.position.copy(shore).add(dir.clone().setLength(len / 2 - 0.3));
+    pier.position.y = Math.max(shore.y, 0) + 0.14;
+    pier.rotation.y = yaw;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.05, len), wood);
+    pier.add(deck);
+    for (let i = 0; i < Math.floor(len / 0.14); i++) {
+      const gap = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.012, 0.025), darkWood);
+      gap.position.set(0, 0.03, -len / 2 + 0.1 + i * 0.14);
+      pier.add(gap);
+    }
+    for (let i = 0; i < 4; i++) {
+      for (const sx of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.5, 7), darkWood);
+        post.position.set(sx * 0.27, -0.2, -len / 2 + 0.2 + (i * (len - 0.4)) / 3);
+        pier.add(post);
+      }
+    }
+    // a mooring post with a lantern-like knob at the seaward end
+    const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.32, 7), darkWood);
+    bollard.position.set(0.22, 0.16, len / 2 - 0.15);
+    pier.add(bollard);
+    g.add(pier);
+  }
+
+  // The Ruin: broken stone walls around the token altar
+  {
+    const c = surfacePoint(RUIN.x, RUIN.y, 0);
+    const ruin = new THREE.Group();
+    ruin.position.copy(c);
+    const wallSpecs: [number, number, number, number, number][] = [
+      [-0.5, 0, 0.08, 0.9, 0.34], [0.5, 0, 0.08, 0.9, 0.26], [0, -0.42, 0.9, 0.08, 0.3], [-0.32, 0.42, 0.34, 0.08, 0.28], [0.34, 0.42, 0.3, 0.08, 0.2],
+    ];
+    for (const [x, z, w, d, h] of wallSpecs) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone);
+      wall.position.set(x, h / 2 + 0.02, z);
+      ruin.add(wall);
+      // a few tumbled blocks
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), stone);
+      block.position.set(x * 1.3 + 0.1, 0.05, z * 1.3 - 0.05);
+      block.rotation.y = x + z;
+      ruin.add(block);
+    }
+    const altar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.08, 6), stone);
+    altar.position.y = 0.05;
+    ruin.add(altar);
+    g.add(ruin);
+  }
+
+  // Cave mouths: a dark recess with a stone rim
+  for (const cave of CAVES) {
+    const p = surfacePoint(cave.x, cave.y, 0.015);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.3, 20), hole);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.copy(p);
+    g.add(disc);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.05, 8, 20), rim);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(p).add(new THREE.Vector3(0, 0.02, 0));
+    g.add(ring);
+    // the number, cut into a small plaque beside the mouth
+    const plaque = numberPlaque(String(cave.n));
+    plaque.position.copy(p).add(new THREE.Vector3(0.42, 0.05, 0.25));
+    g.add(plaque);
+  }
+
+  // Smolder pits: a crater rim with a glowing ember bed
+  const ember = new THREE.MeshStandardMaterial({ color: 0xff4a10, emissive: 0xff5a10, emissiveIntensity: 1.4, roughness: 0.9 });
+  for (const pit of PITS) {
+    const p = surfacePoint(pit.x, pit.y, 0.02);
+    const bed = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), ember);
+    bed.rotation.x = -Math.PI / 2;
+    bed.position.copy(p);
+    g.add(bed);
+    const crater = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.07, 8, 22), rim);
+    crater.rotation.x = -Math.PI / 2;
+    crater.position.copy(p).add(new THREE.Vector3(0, 0.03, 0));
+    crater.scale.set(1, 0.8, 1);
+    g.add(crater);
+    const plaque = numberPlaque(pit.id);
+    plaque.position.copy(p).add(new THREE.Vector3(0, 0.05, 0.5));
+    g.add(plaque);
+  }
+
+  // Dead Man's Plateau: a great tree stump
+  {
+    const p = surfacePoint(SPACE.DMP.x, SPACE.DMP.y, 0);
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.74, 0.26, 18), new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.9 }));
+    stump.position.copy(p).add(new THREE.Vector3(0, 0.13, 0));
+    g.add(stump);
+    const top = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18), new THREE.MeshStandardMaterial({ map: ringsTexture(), roughness: 0.8 }));
+    top.rotation.x = -Math.PI / 2;
+    top.position.copy(p).add(new THREE.Vector3(0, 0.265, 0));
+    g.add(top);
+    // a few roots
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.4;
+      const root = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.1, 0.5, 6), darkWood);
+      root.position.copy(p).add(new THREE.Vector3(Math.cos(a) * 0.75, 0.05, Math.sin(a) * 0.75));
+      root.rotation.z = Math.PI / 2 + 0.3;
+      root.rotation.y = -a;
+      g.add(root);
+    }
+  }
+
+  // Marble sockets at the four fireball homes
+  for (const f of FIREBALLS) {
+    if (f.id === 'V') continue;
+    const p = surfacePoint(f.x, f.y, 0.01);
+    const socket = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 18), rim);
+    socket.rotation.x = -Math.PI / 2;
+    socket.position.copy(p);
+    g.add(socket);
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), new THREE.MeshStandardMaterial({ color: 0xff7a1a, emissive: 0xff6a10, emissiveIntensity: 0.9 }));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.copy(p).add(new THREE.Vector3(0, -0.005, 0));
+    g.add(glow);
+  }
+
+  g.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  return g;
+}
+
+function ringsTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#c08a4a';
+  ctx.fillRect(0, 0, 256, 256);
+  ctx.strokeStyle = 'rgba(90,50,20,0.7)';
+  for (let r = 10; r < 128; r += 9) {
+    ctx.lineWidth = 1 + (r % 3);
+    ctx.beginPath();
+    ctx.ellipse(128, 128, r, r * 0.92, 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(60,30,10,0.8)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(128, 128);
+  ctx.lineTo(210, 60);
+  ctx.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function numberPlaque(text: string): THREE.Mesh {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#efe6c8';
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2a1608';
+  ctx.font = 'bold 40px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 32, 34);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.CircleGeometry(0.13, 16), new THREE.MeshBasicMaterial({ map: t, transparent: true }));
+  m.rotation.x = -Math.PI / 2;
   return m;
 }

@@ -5,7 +5,7 @@ import {
 } from './boardRefs.ts';
 import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
-  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makePalms, makePiece, makeToken, makeTrail,
+  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makeLandmarks, makePalms, makePiece, makeToken, makeTrail,
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
 import { makeWater } from './water.ts';
@@ -93,6 +93,9 @@ export class Board3D {
 
     // raised trail stones standing proud of the terrain
     this.group.add(this.makeStones());
+
+    // landmarks in real geometry: the pier, the Ruin, cave mouths, smolder pits, the stump, marble sockets
+    this.group.add(makeLandmarks());
 
     // embers drifting up from Vul-Kar's crater
     this.embers = this.makeEmbers();
@@ -290,7 +293,7 @@ export class Board3D {
       p.y += 0.45;
       return p;
     }
-    return surfacePoint(f.x, f.y, 0.2);
+    return surfacePoint(f.x, f.y, 0.17);
   }
 
   overview() {
@@ -309,7 +312,8 @@ export class Board3D {
       return p;
     }
     const onStone = s.special !== 'water' && s.special !== 'start' && s.special !== 'vulkar' && s.special !== 'dock';
-    return surfacePoint(s.x, s.y, lift + (onStone ? 0.085 : 0));
+    const extra = onStone ? 0.085 : s.special === 'start' ? 0.26 : s.special === 'dock' ? 0.16 : 0;
+    return surfacePoint(s.x, s.y, lift + extra);
   }
 
   private locationPoint(view: GameView, pid: PlayerId): { pos: THREE.Vector3; lying: boolean; sunk: boolean } {
