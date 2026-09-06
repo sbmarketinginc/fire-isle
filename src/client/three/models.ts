@@ -533,3 +533,81 @@ function numberPlaque(text: string): THREE.Mesh {
   m.rotation.x = -Math.PI / 2;
   return m;
 }
+
+
+/** Low ferns and bushes as one instanced mesh. */
+export function makeBushes(spots: { x: number; y: number; z: number; scale: number }[]): THREE.InstancedMesh {
+  const geo = new THREE.IcosahedronGeometry(0.17, 1);
+  geo.scale(1.2, 0.65, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2f6f2e, roughness: 0.9, flatShading: true });
+  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const c = new THREE.Color();
+  spots.forEach((sp, i) => {
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sp.x * 7.3 + sp.z * 3.1);
+    m.compose(new THREE.Vector3(sp.x, sp.y + 0.05 * sp.scale, sp.z), q, new THREE.Vector3(sp.scale, sp.scale, sp.scale));
+    mesh.setMatrixAt(i, m);
+    mesh.setColorAt(i, c.setHSL(0.3 + ((sp.x * 13.7) % 1) * 0.06, 0.5, 0.28 + ((sp.z * 9.1) % 1) * 0.12));
+  });
+  mesh.count = spots.length;
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/** Scattered boulders for the rocky slopes. */
+export function makeRocks(spots: { x: number; y: number; z: number; scale: number }[]): THREE.InstancedMesh {
+  const geo = new THREE.IcosahedronGeometry(0.14, 0);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x7a7290, roughness: 0.85, flatShading: true });
+  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  spots.forEach((sp, i) => {
+    q.setFromEuler(new THREE.Euler(sp.x * 3.1, sp.z * 5.7, sp.x + sp.z));
+    m.compose(new THREE.Vector3(sp.x, sp.y + 0.04 * sp.scale, sp.z), q, new THREE.Vector3(sp.scale * 1.3, sp.scale * 0.8, sp.scale));
+    mesh.setMatrixAt(i, m);
+  });
+  mesh.count = spots.length;
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/** A name pill that always faces the camera, floated above a piece. */
+export function makeNameplate(name: string, color: string): THREE.Sprite {
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d')!;
+  const size = 40;
+  ctx.font = `bold ${size}px Helvetica, Arial, sans-serif`;
+  const w = Math.ceil(ctx.measureText(name).width) + 54;
+  c.width = w;
+  c.height = 64;
+  const ctx2 = c.getContext('2d')!;
+  ctx2.font = `bold ${size}px Helvetica, Arial, sans-serif`;
+  ctx2.fillStyle = 'rgba(12,6,24,0.78)';
+  ctx2.beginPath();
+  ctx2.roundRect(0, 0, w, 64, 32);
+  ctx2.fill();
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.arc(30, 32, 16, 0, Math.PI * 2);
+  ctx2.fill();
+  ctx2.fillStyle = '#fff3d6';
+  ctx2.textBaseline = 'middle';
+  ctx2.fillText(name, 54, 34);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set((w / 64) * 0.32, 0.32, 1);
+  sp.renderOrder = 9;
+  return sp;
+}
+
+/** Pulsing ring under the piece whose turn it is. */
+export function makeTurnRing(color: string): THREE.Mesh {
+  const geo = new THREE.RingGeometry(0.28, 0.4, 32);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(geo, mat);
+  m.renderOrder = 3;
+  return m;
+}

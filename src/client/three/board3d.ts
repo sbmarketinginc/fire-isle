@@ -5,7 +5,7 @@ import {
 } from './boardRefs.ts';
 import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
-  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makeLandmarks, makePalms, makePiece, makeToken, makeTrail,
+  dieRotationFor, makeBridge, makeBushes, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makeLandmarks, makeNameplate, makePalms, makePiece, makeRocks, makeToken, makeTrail, makeTurnRing,
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
 import { makeWater } from './water.ts';
@@ -60,6 +60,9 @@ export class Board3D {
   labelMesh: THREE.Mesh;
   private trail: THREE.Mesh[] = [];
   private embers: { points: THREE.Points; update: (dt: number) => void } | null = null;
+  private plates = new Map<PlayerId, THREE.Sprite>();
+  private turnRing: THREE.Mesh | null = null;
+  private turnRingFor: PlayerId | null = null;
   private view: GameView | null = null;
   private animating = false;
   private t = 0;
@@ -97,6 +100,19 @@ export class Board3D {
     // landmarks in real geometry: the pier, the Ruin, cave mouths, smolder pits, the stump, marble sockets
     this.group.add(makeLandmarks());
 
+    // undergrowth in the jungle and boulders on the slopes
+    this.group.add(makeBushes(this.propSpots(0.42, 1.45, 21, 0.62, 140)));
+    this.group.add(makeRocks(this.propSpots(1.7, 3.6, 24, 0.5, 70)));
+
+    // the summit glows: a lava ring under the idol and a warm light in its mouth
+    const lava = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.95, 32), new THREE.MeshStandardMaterial({ color: 0xff5a10, emissive: 0xff4a00, emissiveIntensity: 1.2, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+    lava.rotation.x = -Math.PI / 2;
+    lava.position.copy(this.idol.position).add(new THREE.Vector3(0, 0.03, 0));
+    this.group.add(lava);
+    const mouthLight = new THREE.PointLight(0xff7a2a, 2.2, 7, 1.8);
+    mouthLight.position.set(0, 0.7, -0.8);
+    this.idol.add(mouthLight);
+
     // embers drifting up from Vul-Kar's crater
     this.embers = this.makeEmbers();
     this.group.add(this.embers.points);
@@ -111,8 +127,8 @@ export class Board3D {
     this.labelMesh.visible = false;
     this.group.add(this.labelMesh);
 
-    // the plastic tray under the island
-    const tray = new THREE.Mesh(new THREE.BoxGeometry(WORLD_W + 1.2, 0.5, WORLD_H + 1.2), new THREE.MeshStandardMaterial({ color: 0x142a6e, roughness: 0.6 }));
+    // the moulded plastic tray under the island
+    const tray = new THREE.Mesh(new RoundedBoxGeometry(WORLD_W + 1.2, 0.5, WORLD_H + 1.2, 3, 0.16), new THREE.MeshPhysicalMaterial({ color: 0x142a6e, roughness: 0.45, clearcoat: 0.35, clearcoatRoughness: 0.4 }));
     tray.position.y = -0.3;
     tray.receiveShadow = true;
     this.group.add(tray);
@@ -254,6 +270,37 @@ export class Board3D {
     return { points, update };
   }
 
+  /** Deterministic prop positions on ground between two heights, clear of trails and features. */
+  private propSpots(hMin: number, hMax: number, clearance: number, keep: number, max: number): { x: number; y: number; z: number; scale: number }[] {
+    const out: { x: number; y: number; z: number; scale: number }[] = [];
+    const hash = (a: number, b: number) => {
+      const v = Math.sin(a * 12.9898 + b * 78.233 + hMin * 3.7) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const keepOut = [
+      { x: SPACE.VKP.x, y: SPACE.VKP.y, r: 70 }, { x: SPACE.DMP.x, y: SPACE.DMP.y, r: 50 }, { x: RUIN.x, y: RUIN.y, r: 45 },
+      ...Object.values(CAVE).map((c) => ({ x: c.x, y: c.y, r: 30 })), ...Object.values(PIT).map((q) => ({ x: q.x, y: q.y, r: 30 })),
+      ...FIREBALLS.map((f) => ({ x: f.x, y: f.y, r: 26 })),
+    ];
+    for (let gy = 36; gy < 720 && out.length < max; gy += 18) {
+      for (let gx = 50; gx < 990 && out.length < max; gx += 18) {
+        const x = gx + (hash(gx, gy) - 0.5) * 16;
+        const y = gy + (hash(gy, gx) - 0.5) * 16;
+        if (shoreDistance(x, y) < 16) continue;
+        const h = heightAt(x, y);
+        if (h < hMin || h > hMax) continue;
+        if (keepOut.some((k) => Math.hypot(k.x - x, k.y - y) < k.r)) continue;
+        let near = Infinity;
+        for (const sp of Object.values(SPACE)) near = Math.min(near, Math.hypot(sp.x - x, sp.y - y));
+        if (near < clearance) continue;
+        if (hash(x, y) < keep) continue;
+        const p = surfacePoint(x, y, 0);
+        out.push({ x: p.x, y: p.y, z: p.z, scale: 0.6 + hash(y, x) * 0.7 });
+      }
+    }
+    return out;
+  }
+
   /** Deterministic palm positions on jungle ground clear of every trail and feature. */
   private palmSpots(): { x: number; y: number; z: number; scale: number; lean: number }[] {
     const out: { x: number; y: number; z: number; scale: number; lean: number }[] = [];
@@ -358,6 +405,9 @@ export class Board3D {
         g = makePiece(p.color);
         this.pieces.set(p.id, g);
         this.group.add(g);
+        const plate = makeNameplate(p.name, p.color);
+        this.plates.set(p.id, plate);
+        this.group.add(plate);
       }
       const lp = this.locationPoint(view, p.id);
       g.position.copy(lp.pos);
@@ -367,6 +417,14 @@ export class Board3D {
     this.syncJewel(view);
     this.syncTokens(view);
     this.idolTargetRot = FACING_ROT[view.vulkarFacing] ?? Math.PI;
+    // ring under the active player's piece
+    if (!this.turnRing || this.turnRingFor !== view.active) {
+      if (this.turnRing) this.group.remove(this.turnRing);
+      this.turnRing = makeTurnRing(view.players[view.active].color);
+      this.turnRingFor = view.active;
+      this.group.add(this.turnRing);
+    }
+    this.turnRing.visible = view.phase !== 'gameOver';
   }
 
   private syncJewel(view: GameView) {
@@ -417,7 +475,23 @@ export class Board3D {
       const g = this.pieces.get(this.view.jewel.player);
       if (g) this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 0.92 + Math.sin(t * 3) * 0.03, 0));
     }
-    // eye glow pulse
+    // nameplates follow their pieces; the turn ring pulses under the active piece
+    for (const [pid, plate] of this.plates) {
+      const g = this.pieces.get(pid);
+      if (!g) continue;
+      const carrying = this.view?.jewel.kind === 'player' && this.view.jewel.player === pid;
+      plate.position.copy(g.position).add(new THREE.Vector3(0, (carrying ? 1.3 : 1.05) * g.scale.x + 0.1, 0));
+      plate.visible = this.view?.players[pid].loc.kind !== 'pit' || !(this.view.players[pid].loc as { down?: boolean }).down;
+    }
+    if (this.turnRing && this.view) {
+      const g = this.pieces.get(this.view.active);
+      if (g) {
+        this.turnRing.position.copy(g.position).add(new THREE.Vector3(0, 0.02, 0));
+        const k = 1 + 0.1 * Math.sin(t * 4);
+        this.turnRing.scale.set(k, 1, k);
+        (this.turnRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.3 * Math.sin(t * 4);
+      }
+    }
     for (const h of this.highlights) {
       const m = h.material as THREE.MeshBasicMaterial;
       m.opacity = 0.65 + 0.35 * Math.sin(t * 5 + h.position.x);

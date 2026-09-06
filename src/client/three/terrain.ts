@@ -436,7 +436,13 @@ export function paintBoardTexture(scale = 2): HTMLCanvasElement {
           const foam = THREE.MathUtils.clamp((gorge - 0.35) * 2.2, 0, 1) * (0.5 + 0.5 * fbm(x * 0.08, y * 0.08, 3));
           col = lerpColor(col, lerpColor(C.shallow, C.foam, foam), THREE.MathUtils.clamp((gorge - 0.35) * 2, 0, 1));
         }
-        col = [col[0] * light, col[1] * light, col[2] * light];
+        // crevices darken, ridges catch light (curvature of the height field)
+        const dc = 4;
+        const lap = heightAt(x + dc, y) + heightAt(x - dc, y) + heightAt(x, y + dc) + heightAt(x, y - dc) - 4 * h;
+        const crevice = THREE.MathUtils.clamp(lap * 2.2, 0, 0.42) * THREE.MathUtils.smoothstep(h, 0.6, 1.4);
+        const ridge = THREE.MathUtils.clamp(-lap * 1.4, 0, 0.16);
+        const shade = light * (1 - crevice) * (1 + ridge);
+        col = [col[0] * shade, col[1] * shade, col[2] * shade];
       }
       const k = (j * W + i) * 4;
       data[k] = col[0];
