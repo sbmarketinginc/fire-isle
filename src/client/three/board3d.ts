@@ -5,7 +5,7 @@ import {
 } from './boardRefs.ts';
 import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
-  dieRotationFor, makeBridge, makeBushes, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makeLandmarks, makeNameplate, makePalms, makePiece, makeRocks, makeToken, makeTrail, makeTurnRing,
+  dieRotationFor, makeBridge, makeBushes, makeDie, makeFireball, makeHighlight, makeIdol, makeImpactRing, makeJewel, makeLandmarks, makeNameplate, makePalms, makePiece, makeRocks, makeToken, makeTrail, makeTurnRing,
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
 import { makeWater } from './water.ts';
@@ -62,6 +62,7 @@ export class Board3D {
   private embers: { points: THREE.Points; update: (dt: number) => void } | null = null;
   private plates = new Map<PlayerId, THREE.Sprite>();
   private turnRing: THREE.Mesh | null = null;
+  private impact: THREE.Mesh | null = null;
   private turnRingFor: PlayerId | null = null;
   private view: GameView | null = null;
   private animating = false;
@@ -469,6 +470,9 @@ export class Board3D {
     const d = this.idolTargetRot - this.idol.rotation.y;
     const dd = Math.atan2(Math.sin(d), Math.cos(d));
     this.idol.rotation.y += dd * Math.min(1, dt * 3);
+    // Vul-Kar's eyes flicker like embers
+    const eyeMat = this.idol.userData.eyeMat as THREE.MeshStandardMaterial | undefined;
+    if (eyeMat) eyeMat.emissiveIntensity = 1.4 + Math.sin(t * 7.3) * 0.25 + Math.sin(t * 17.1) * 0.15;
     // jewel bob & spin
     this.jewel.rotation.y += dt * 1.2;
     if (this.view?.jewel.kind === 'player' && !this.animating) {
@@ -716,9 +720,29 @@ export class Board3D {
     g.scale.setScalar(0.62);
   }
 
+  private flashAt(pos: THREE.Vector3) {
+    if (!this.impact) {
+      this.impact = makeImpactRing();
+      this.group.add(this.impact);
+    }
+    const ring = this.impact;
+    ring.position.copy(pos).add(new THREE.Vector3(0, 0.06, 0));
+    ring.visible = true;
+    const t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / 450);
+      ring.scale.setScalar(0.6 + k * 3.2);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      if (k < 1) requestAnimationFrame(step);
+      else ring.visible = false;
+    };
+    step();
+  }
+
   private async animateKnock(pid: PlayerId, finalView: GameView, fast: boolean) {
     const g = this.pieces.get(pid);
     if (!g) return;
+    this.flashAt(g.position);
     // topple
     const start = performance.now();
     const ms = fast ? 120 : 350;

@@ -5,6 +5,22 @@ import { surfacePoint } from './terrain.ts';
 
 const black = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35, metalness: 0.15 });
 
+let shadowTex: THREE.CanvasTexture | null = null;
+function shadowTexture(): THREE.CanvasTexture {
+  if (shadowTex) return shadowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  g.addColorStop(0, 'rgba(0,0,0,0.9)');
+  g.addColorStop(0.6, 'rgba(0,0,0,0.45)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  shadowTex = new THREE.CanvasTexture(c);
+  return shadowTex;
+}
+
 export function makePiece(color: string): THREE.Group {
   const g = new THREE.Group();
   const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color), roughness: 0.38, metalness: 0.02, clearcoat: 0.55, clearcoatRoughness: 0.35 });
@@ -34,6 +50,22 @@ export function makePiece(color: string): THREE.Group {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 12), mat);
   head.position.y = 0.67;
   g.add(head);
+  // a face: two eyes under the brim, so the explorer has a front
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1010, roughness: 0.4 });
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), eyeMat);
+    eye.position.set(sx * 0.03, 0.675, 0.078);
+    g.add(eye);
+  }
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.118, 0.118, 0.03, 12), new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.7 }));
+  belt.position.y = 0.33;
+  g.add(belt);
+  // soft contact shadow so the piece sits on the ground even without shadow maps
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.3, 20), new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.55 }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.005;
+  shadow.renderOrder = 2;
+  g.add(shadow);
   const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.07, 14), mat);
   hat.position.y = 0.73;
   g.add(hat);
@@ -87,6 +119,7 @@ export function makeIdol(): THREE.Group {
   g.add(nose);
   // eyes: glowing embers set deep under the brow
   const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xff7a00, emissiveIntensity: 1.6 });
+  g.userData.eyeMat = eyeMat;
   const pupilMat = new THREE.MeshStandardMaterial({ color: 0x1a0500, roughness: 0.6 });
   for (const sx of [-1, 1]) {
     const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), eyeMat);
@@ -609,5 +642,17 @@ export function makeTurnRing(color: string): THREE.Mesh {
   const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide });
   const m = new THREE.Mesh(geo, mat);
   m.renderOrder = 3;
+  return m;
+}
+
+
+/** Expanding ring used as a fireball impact flash. */
+export function makeImpactRing(): THREE.Mesh {
+  const geo = new THREE.RingGeometry(0.12, 0.3, 28);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const m = new THREE.Mesh(geo, mat);
+  m.visible = false;
+  m.renderOrder = 7;
   return m;
 }
