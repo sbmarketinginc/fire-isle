@@ -6,7 +6,7 @@ import {
 import type { Action, Card, GameView, LogEvent, PlayerId } from '../engine/index.ts';
 import type { Board3D } from './three/board3d.ts';
 import type { Session } from './session.ts';
-import { setSoundEnabled, soundEnabled } from './audio.ts';
+import { musicEnabled, setMusicEnabled, setSoundEnabled, soundEnabled } from './audio.ts';
 import { CAVE_PREFIX } from '../engine/paths.ts';
 
 export interface UIOptions {
@@ -260,13 +260,20 @@ export class GameUI {
       this.board.labelMesh.visible = this.labelsOn;
     };
     const sndBtn = el('button', 'iconbtn ghost', soundEnabled() ? '🔊' : '🔇') as HTMLButtonElement;
+    sndBtn.title = 'Sound effects';
     sndBtn.onclick = () => {
       setSoundEnabled(!soundEnabled());
       sndBtn.textContent = soundEnabled() ? '🔊' : '🔇';
     };
+    const musicBtn = el('button', `iconbtn ghost${musicEnabled() ? '' : ' off'}`, '🎵') as HTMLButtonElement;
+    musicBtn.title = 'Music';
+    musicBtn.onclick = () => {
+      setMusicEnabled(!musicEnabled());
+      musicBtn.classList.toggle('off', !musicEnabled());
+    };
     const menuBtn = el('button', 'iconbtn ghost', '☰') as HTMLButtonElement;
     menuBtn.onclick = () => this.showMenu();
-    this.top.append(logBtn, labelBtn, sndBtn, menuBtn);
+    this.top.append(logBtn, labelBtn, sndBtn, musicBtn, menuBtn);
   }
 
   private renderLog(log: LogEvent[]) {

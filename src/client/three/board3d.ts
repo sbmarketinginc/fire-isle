@@ -9,7 +9,7 @@ import {
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, surfacePoint, toWorld } from './terrain.ts';
 import type { SceneApp } from './scene.ts';
-import { sfx } from '../audio.ts';
+import { duckMusic, sfx } from '../audio.ts';
 
 const FACING_ROT: Record<string, number> = { S: Math.PI, SW: (3 * Math.PI) / 4, E: -Math.PI / 2, W: Math.PI / 2, NE: -Math.PI / 4 };
 
@@ -477,6 +477,7 @@ export class Board3D {
     ball.visible = true;
     ball.position.copy(pts[0]);
     this.app.focusOn(curve.getPoint(0.5), Math.max(9, len * 0.9));
+    duckMusic(ms + 800);
     sfx.fireball();
     const start = performance.now();
     const knocked = new Set<PlayerId>();

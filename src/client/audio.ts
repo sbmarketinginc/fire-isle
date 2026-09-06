@@ -102,3 +102,78 @@ export const sfx = {
     tone(c, 220, 0.6, 0.2, 'sine', 0.5);
   },
 };
+
+
+// ---------------------------------------------------------------------------
+// Background music
+// ---------------------------------------------------------------------------
+
+const MUSIC_KEY = 'fireisle.music';
+let musicEl: HTMLAudioElement | null = null;
+let musicWanted = true;
+let fadeTimer: number | null = null;
+try {
+  musicWanted = localStorage.getItem(MUSIC_KEY) !== 'off';
+} catch { /* ignore */ }
+
+export const MUSIC_VOLUME = 0.32;
+
+function musicElement(): HTMLAudioElement {
+  if (!musicEl) {
+    musicEl = new Audio(new URL('./audio/fire-isle-theme.mp3', document.baseURI).href);
+    musicEl.loop = true;
+    musicEl.preload = 'auto';
+    musicEl.volume = 0;
+  }
+  return musicEl;
+}
+
+function fadeTo(target: number, ms: number, onDone?: () => void) {
+  const el = musicElement();
+  if (fadeTimer !== null) window.clearInterval(fadeTimer);
+  const start = el.volume;
+  const t0 = performance.now();
+  fadeTimer = window.setInterval(() => {
+    const k = Math.min(1, (performance.now() - t0) / ms);
+    el.volume = start + (target - start) * k;
+    if (k >= 1) {
+      if (fadeTimer !== null) window.clearInterval(fadeTimer);
+      fadeTimer = null;
+      onDone?.();
+    }
+  }, 50);
+}
+
+/** Start the theme (call from a user gesture; browsers block autoplay otherwise). */
+export function startMusic() {
+  if (!musicWanted) return;
+  const el = musicElement();
+  if (!el.paused) return;
+  el.play().then(() => fadeTo(MUSIC_VOLUME, 2500)).catch(() => { /* blocked until the next gesture */ });
+}
+
+export function musicEnabled(): boolean {
+  return musicWanted;
+}
+
+export function musicPlaying(): boolean {
+  return !!musicEl && !musicEl.paused && musicEl.currentTime > 0;
+}
+
+export function setMusicEnabled(on: boolean) {
+  musicWanted = on;
+  try {
+    localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off');
+  } catch { /* ignore */ }
+  if (on) startMusic();
+  else if (musicEl && !musicEl.paused) fadeTo(0, 800, () => musicEl?.pause());
+}
+
+/** Briefly lower the music (e.g. while a fireball rolls). */
+export function duckMusic(ms: number) {
+  if (!musicEl || musicEl.paused) return;
+  fadeTo(MUSIC_VOLUME * 0.35, 300);
+  window.setTimeout(() => {
+    if (musicEl && !musicEl.paused && musicWanted) fadeTo(MUSIC_VOLUME, 900);
+  }, ms);
+}

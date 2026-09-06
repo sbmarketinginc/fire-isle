@@ -36,6 +36,7 @@ input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px soli
 .chip .jewel { color: #ff5a5a; }
 .chip .token { color: #bbb; }
 .iconbtn { padding: 8px 10px; font-size: 14px; }
+.iconbtn.off { opacity: 0.45; text-decoration: line-through; }
 
 /* bottom panel */
 .bottom { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px calc(10px + var(--safe-bottom)); background: linear-gradient(0deg, rgba(10,4,20,0.9), rgba(10,4,20,0)); }

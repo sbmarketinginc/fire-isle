@@ -1,7 +1,7 @@
 import './styles.css';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES } from '../engine/index.ts';
 import type { GameView, LogEvent, PlayerId } from '../engine/index.ts';
-import { unlockAudio } from './audio.ts';
+import { musicEnabled, musicPlaying, setMusicEnabled, startMusic, unlockAudio } from './audio.ts';
 import { LocalSession, NetSession, defaultServerUrl } from './session.ts';
 import type { LobbyInfo, Session } from './session.ts';
 import { Board3D } from './three/board3d.ts';
@@ -47,15 +47,22 @@ function showMenu() {
       <button class="primary" id="btnLocal">Pass &amp; Play (2–4 players, one device)</button>
       <button id="btnOnline">Play Online</button>
       <button class="ghost" id="btnRules">How to Play</button>
+      <button class="ghost" id="btnMusic">${musicEnabled() ? '🎵 Music: on' : '🎵 Music: off'}</button>
     </div>
     <p class="small" style="margin-top:12px">Drag to orbit the island, pinch to zoom. Works best in landscape.</p>`);
+  ov.querySelector('#btnMusic')!.addEventListener('click', (e) => {
+    setMusicEnabled(!musicEnabled());
+    (e.currentTarget as HTMLButtonElement).textContent = musicEnabled() ? '🎵 Music: on' : '🎵 Music: off';
+  });
   ov.querySelector('#btnLocal')!.addEventListener('click', () => {
     unlockAudio();
+    startMusic();
     ov.remove();
     showLocalSetup();
   });
   ov.querySelector('#btnOnline')!.addEventListener('click', () => {
     unlockAudio();
+    startMusic();
     ov.remove();
     showOnlineSetup();
   });
@@ -329,6 +336,9 @@ async function tryRejoin(): Promise<boolean> {
   });
 }
 
+// autoplay policy: the theme can only start after the first tap or click
+window.addEventListener('pointerdown', () => startMusic(), { once: true });
+
 async function boot() {
   const loading = overlay('<h1>FIRE ISLE</h1><p>Raising the island from the sea…</p>');
   await new Promise((r) => setTimeout(r, 30));
@@ -352,6 +362,9 @@ boot();
   },
   get board() {
     return board;
+  },
+  get musicPlaying() {
+    return musicPlaying();
   },
   startLocal,
 };
