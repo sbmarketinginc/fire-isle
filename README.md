@@ -8,6 +8,9 @@ Charm tokens, and the 48-card deck follow the original rulebook; the engine enfo
 3D board is a replica of the vacuum-formed gameboard, and up to four players can play on one device
 (pass-and-play) or online through the included server.
 
+**Play it now:** https://sbmarketinginc.github.io/fire-isle/ (Pass & Play on one phone; add it to
+your home screen for full screen). Online rooms need the game server below.
+
 ## Run it
 
 ```bash
@@ -23,6 +26,14 @@ Open the game on your phone using the "Network" URL that Vite prints (same Wi-Fi
 needs no server. "Play Online" connects to the server on port 8787 in development, or to the same
 host that served the page in production (set `VITE_SERVER_URL=wss://host/ws` at build time to
 point elsewhere).
+
+## Hosting
+
+* **Static (GitHub Pages)**: `.github/workflows/pages.yml` builds with `VITE_BASE=/fire-isle/` and
+  deploys on every push to `main`. Pass & Play works there; Online needs a server.
+* **Full app with online rooms**: the `Dockerfile` builds the client and serves it with the
+  WebSocket server on `$PORT` (Cloud Run, Fly.io, Railway, a VPS…). Point the static site at it by
+  building with `VITE_SERVER_URL=wss://your-host/ws`, or just play from the server's own URL.
 
 ## Mobile packaging
 
