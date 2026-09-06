@@ -5,12 +5,10 @@ import {
 } from './boardRefs.ts';
 import type { GameView, LogEvent, PlayerId } from '../../engine/index.ts';
 import {
-  dieRotationFor, makeBridge, makeBushes, makeDie, makeFireball, makeHighlight, makeIdol, makeImpactRing, makeJewel, makeLandmarks, makeNameplate, makePalms, makePiece, makeRocks, makeToken, makeTrail, makeTurnRing,
+  dieRotationFor, makeBridge, makeDie, makeFireball, makeHighlight, makeIdol, makeJewel, makePalms, makePiece, makeToken, makeTrail,
 } from './models.ts';
 import { BOARD_SCALE, WORLD_H, WORLD_W, createTerrainGeometry, heightAt, paintBoardTexture, paintLabels, paintNormalMap, shoreDistance, surfacePoint } from './terrain.ts';
 import { makeWater } from './water.ts';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { ADJ, SPACES } from '../../engine/board.ts';
 import { BOARD_H, BOARD_W } from '../../engine/board.ts';
 import type { SceneApp } from './scene.ts';
 import { duckMusic, sfx } from '../audio.ts';
@@ -59,11 +57,6 @@ export class Board3D {
   highlights: THREE.Mesh[] = [];
   labelMesh: THREE.Mesh;
   private trail: THREE.Mesh[] = [];
-  private embers: { points: THREE.Points; update: (dt: number) => void } | null = null;
-  private plates = new Map<PlayerId, THREE.Sprite>();
-  private turnRing: THREE.Mesh | null = null;
-  private impact: THREE.Mesh | null = null;
-  private turnRingFor: PlayerId | null = null;
   private view: GameView | null = null;
   private animating = false;
   private t = 0;
@@ -95,30 +88,6 @@ export class Board3D {
     // palm trees in the jungle, away from the trails
     this.group.add(makePalms(this.palmSpots()));
 
-    // raised trail stones standing proud of the terrain
-    this.group.add(this.makeStones());
-
-    // landmarks in real geometry: the pier, the Ruin, cave mouths, smolder pits, the stump, marble sockets
-    this.group.add(makeLandmarks());
-
-    // undergrowth in the jungle and boulders on the slopes
-    this.group.add(makeBushes(this.propSpots(0.42, 1.45, 21, 0.62, 140)));
-    this.group.add(makeRocks(this.propSpots(1.7, 3.6, 24, 0.5, 70)));
-
-    // the summit glows: a lava ring under the idol and a warm light in its mouth
-    const lava = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.95, 32), new THREE.MeshStandardMaterial({ color: 0xff5a10, emissive: 0xff4a00, emissiveIntensity: 1.2, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
-    lava.rotation.x = -Math.PI / 2;
-    lava.position.copy(this.idol.position).add(new THREE.Vector3(0, 0.03, 0));
-    this.group.add(lava);
-    const mouthLight = new THREE.PointLight(0xff7a2a, 2.2, 7, 1.8);
-    mouthLight.position.set(0, 0.7, -0.8);
-    this.idol.add(mouthLight);
-
-    // embers drifting up from Vul-Kar's crater
-    this.embers = this.makeEmbers();
-    this.group.add(this.embers.points);
-    app.onFrame((dt) => this.embers?.update(dt));
-
     // labels overlay (toggle)
     const lgeo = createTerrainGeometry(120, 87);
     const ltex = new THREE.CanvasTexture(paintLabels(2));
@@ -128,8 +97,8 @@ export class Board3D {
     this.labelMesh.visible = false;
     this.group.add(this.labelMesh);
 
-    // the moulded plastic tray under the island
-    const tray = new THREE.Mesh(new RoundedBoxGeometry(WORLD_W + 1.2, 0.5, WORLD_H + 1.2, 3, 0.16), new THREE.MeshPhysicalMaterial({ color: 0x142a6e, roughness: 0.45, clearcoat: 0.35, clearcoatRoughness: 0.4 }));
+    // the plastic tray under the island
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(WORLD_W + 1.2, 0.5, WORLD_H + 1.2), new THREE.MeshStandardMaterial({ color: 0x142a6e, roughness: 0.6 }));
     tray.position.y = -0.3;
     tray.receiveShadow = true;
     this.group.add(tray);
@@ -182,126 +151,6 @@ export class Board3D {
     this.setupPicking();
   }
 
-  /** One instanced mesh of rounded stones, one per trail space, tinted per space type. */
-  private makeStones(): THREE.InstancedMesh {
-    const stones = SPACES.filter((sp) => !sp.bridge && sp.special !== 'water' && sp.special !== 'start' && sp.special !== 'vulkar' && sp.special !== 'dock');
-    const geo = new RoundedBoxGeometry(0.5, 0.09, 0.36, 3, 0.05);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, metalness: 0.0 });
-    const mesh = new THREE.InstancedMesh(geo, mat, stones.length);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const light = new THREE.Color(0x8c9aa6);
-    const dark = new THREE.Color(0x2a343e);
-    const beach = new THREE.Color(0xb3bbc0);
-    const chip = new THREE.Color(0xa6b2bc);
-    stones.forEach((sp, i) => {
-      const nb = ADJ[sp.id].map((id) => SPACE[id]).filter((n) => !n.bridge);
-      let ang = 0;
-      if (nb.length >= 2) ang = Math.atan2(nb[1].y - nb[0].y, nb[1].x - nb[0].x);
-      else if (nb.length === 1) ang = Math.atan2(nb[0].y - sp.y, nb[0].x - sp.x);
-      const p = surfacePoint(sp.x, sp.y, 0.03);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -ang);
-      const sc = sp.special === 'beach' ? 1.35 : sp.special === 'witchlordStep' ? 1.15 : 1;
-      m.compose(p, q, new THREE.Vector3(sc, 1, sc));
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, sp.dark ? dark : sp.special === 'beach' ? beach : sp.rockChip ? chip : light);
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-
-  /** Glowing embers rising from the idol's mouth and crater. */
-  private makeEmbers(): { points: THREE.Points; update: (dt: number) => void } {
-    const N = this.app.quality === 'high' ? 90 : 45;
-    const pos = new Float32Array(N * 3);
-    const col = new Float32Array(N * 3);
-    const age = new Float32Array(N);
-    const life = new Float32Array(N);
-    const vel = new Float32Array(N * 3);
-    const origin = this.idol.position.clone().add(new THREE.Vector3(0, 0.55, -0.3));
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const ctx = c.getContext('2d')!;
-    const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.3, 'rgba(255,200,120,0.8)');
-    g.addColorStop(1, 'rgba(255,80,0,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
-    const tex = new THREE.CanvasTexture(c);
-    const mat = new THREE.PointsMaterial({ size: 0.22, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
-    const points = new THREE.Points(geo, mat);
-    points.frustumCulled = false;
-    const reset = (i: number) => {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 0.25;
-      pos[i * 3] = origin.x + Math.cos(a) * r;
-      pos[i * 3 + 1] = origin.y;
-      pos[i * 3 + 2] = origin.z + Math.sin(a) * r;
-      vel[i * 3] = (Math.random() - 0.5) * 0.25;
-      vel[i * 3 + 1] = 0.45 + Math.random() * 0.5;
-      vel[i * 3 + 2] = (Math.random() - 0.5) * 0.25 - 0.15;
-      age[i] = 0;
-      life[i] = 1.8 + Math.random() * 1.6;
-    };
-    for (let i = 0; i < N; i++) {
-      reset(i);
-      age[i] = Math.random() * life[i];
-    }
-    const update = (dt: number) => {
-      for (let i = 0; i < N; i++) {
-        age[i] += dt;
-        if (age[i] > life[i]) reset(i);
-        const k = age[i] / life[i];
-        pos[i * 3] += (vel[i * 3] + Math.sin(age[i] * 3 + i) * 0.12) * dt;
-        pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
-        pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
-        const glow = 1 - k;
-        col[i * 3] = glow;
-        col[i * 3 + 1] = glow * (0.45 - k * 0.3);
-        col[i * 3 + 2] = glow * 0.08;
-      }
-      geo.attributes.position.needsUpdate = true;
-      geo.attributes.color.needsUpdate = true;
-    };
-    return { points, update };
-  }
-
-  /** Deterministic prop positions on ground between two heights, clear of trails and features. */
-  private propSpots(hMin: number, hMax: number, clearance: number, keep: number, max: number): { x: number; y: number; z: number; scale: number }[] {
-    const out: { x: number; y: number; z: number; scale: number }[] = [];
-    const hash = (a: number, b: number) => {
-      const v = Math.sin(a * 12.9898 + b * 78.233 + hMin * 3.7) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    const keepOut = [
-      { x: SPACE.VKP.x, y: SPACE.VKP.y, r: 70 }, { x: SPACE.DMP.x, y: SPACE.DMP.y, r: 50 }, { x: RUIN.x, y: RUIN.y, r: 45 },
-      ...Object.values(CAVE).map((c) => ({ x: c.x, y: c.y, r: 30 })), ...Object.values(PIT).map((q) => ({ x: q.x, y: q.y, r: 30 })),
-      ...FIREBALLS.map((f) => ({ x: f.x, y: f.y, r: 26 })),
-    ];
-    for (let gy = 36; gy < 720 && out.length < max; gy += 18) {
-      for (let gx = 50; gx < 990 && out.length < max; gx += 18) {
-        const x = gx + (hash(gx, gy) - 0.5) * 16;
-        const y = gy + (hash(gy, gx) - 0.5) * 16;
-        if (shoreDistance(x, y) < 16) continue;
-        const h = heightAt(x, y);
-        if (h < hMin || h > hMax) continue;
-        if (keepOut.some((k) => Math.hypot(k.x - x, k.y - y) < k.r)) continue;
-        let near = Infinity;
-        for (const sp of Object.values(SPACE)) near = Math.min(near, Math.hypot(sp.x - x, sp.y - y));
-        if (near < clearance) continue;
-        if (hash(x, y) < keep) continue;
-        const p = surfacePoint(x, y, 0);
-        out.push({ x: p.x, y: p.y, z: p.z, scale: 0.6 + hash(y, x) * 0.7 });
-      }
-    }
-    return out;
-  }
-
   /** Deterministic palm positions on jungle ground clear of every trail and feature. */
   private palmSpots(): { x: number; y: number; z: number; scale: number; lean: number }[] {
     const out: { x: number; y: number; z: number; scale: number; lean: number }[] = [];
@@ -341,7 +190,7 @@ export class Board3D {
       p.y += 0.45;
       return p;
     }
-    return surfacePoint(f.x, f.y, 0.17);
+    return surfacePoint(f.x, f.y, 0.2);
   }
 
   overview() {
@@ -359,9 +208,7 @@ export class Board3D {
       p.y = Math.max(a.y, c.y) + 0.12 + 0.03 + lift;
       return p;
     }
-    const onStone = s.special !== 'water' && s.special !== 'start' && s.special !== 'vulkar' && s.special !== 'dock';
-    const extra = onStone ? 0.085 : s.special === 'start' ? 0.26 : s.special === 'dock' ? 0.16 : 0;
-    return surfacePoint(s.x, s.y, lift + extra);
+    return surfacePoint(s.x, s.y, lift);
   }
 
   private locationPoint(view: GameView, pid: PlayerId): { pos: THREE.Vector3; lying: boolean; sunk: boolean } {
@@ -406,9 +253,6 @@ export class Board3D {
         g = makePiece(p.color);
         this.pieces.set(p.id, g);
         this.group.add(g);
-        const plate = makeNameplate(p.name, p.color);
-        this.plates.set(p.id, plate);
-        this.group.add(plate);
       }
       const lp = this.locationPoint(view, p.id);
       g.position.copy(lp.pos);
@@ -418,14 +262,6 @@ export class Board3D {
     this.syncJewel(view);
     this.syncTokens(view);
     this.idolTargetRot = FACING_ROT[view.vulkarFacing] ?? Math.PI;
-    // ring under the active player's piece
-    if (!this.turnRing || this.turnRingFor !== view.active) {
-      if (this.turnRing) this.group.remove(this.turnRing);
-      this.turnRing = makeTurnRing(view.players[view.active].color);
-      this.turnRingFor = view.active;
-      this.group.add(this.turnRing);
-    }
-    this.turnRing.visible = view.phase !== 'gameOver';
   }
 
   private syncJewel(view: GameView) {
@@ -470,32 +306,13 @@ export class Board3D {
     const d = this.idolTargetRot - this.idol.rotation.y;
     const dd = Math.atan2(Math.sin(d), Math.cos(d));
     this.idol.rotation.y += dd * Math.min(1, dt * 3);
-    // Vul-Kar's eyes flicker like embers
-    const eyeMat = this.idol.userData.eyeMat as THREE.MeshStandardMaterial | undefined;
-    if (eyeMat) eyeMat.emissiveIntensity = 1.4 + Math.sin(t * 7.3) * 0.25 + Math.sin(t * 17.1) * 0.15;
     // jewel bob & spin
     this.jewel.rotation.y += dt * 1.2;
     if (this.view?.jewel.kind === 'player' && !this.animating) {
       const g = this.pieces.get(this.view.jewel.player);
       if (g) this.jewel.position.copy(g.position).add(new THREE.Vector3(0, 0.92 + Math.sin(t * 3) * 0.03, 0));
     }
-    // nameplates follow their pieces; the turn ring pulses under the active piece
-    for (const [pid, plate] of this.plates) {
-      const g = this.pieces.get(pid);
-      if (!g) continue;
-      const carrying = this.view?.jewel.kind === 'player' && this.view.jewel.player === pid;
-      plate.position.copy(g.position).add(new THREE.Vector3(0, (carrying ? 1.3 : 1.05) * g.scale.x + 0.1, 0));
-      plate.visible = this.view?.players[pid].loc.kind !== 'pit' || !(this.view.players[pid].loc as { down?: boolean }).down;
-    }
-    if (this.turnRing && this.view) {
-      const g = this.pieces.get(this.view.active);
-      if (g) {
-        this.turnRing.position.copy(g.position).add(new THREE.Vector3(0, 0.02, 0));
-        const k = 1 + 0.1 * Math.sin(t * 4);
-        this.turnRing.scale.set(k, 1, k);
-        (this.turnRing.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.3 * Math.sin(t * 4);
-      }
-    }
+    // eye glow pulse
     for (const h of this.highlights) {
       const m = h.material as THREE.MeshBasicMaterial;
       m.opacity = 0.65 + 0.35 * Math.sin(t * 5 + h.position.x);
@@ -720,29 +537,9 @@ export class Board3D {
     g.scale.setScalar(0.62);
   }
 
-  private flashAt(pos: THREE.Vector3) {
-    if (!this.impact) {
-      this.impact = makeImpactRing();
-      this.group.add(this.impact);
-    }
-    const ring = this.impact;
-    ring.position.copy(pos).add(new THREE.Vector3(0, 0.06, 0));
-    ring.visible = true;
-    const t0 = performance.now();
-    const step = () => {
-      const k = Math.min(1, (performance.now() - t0) / 450);
-      ring.scale.setScalar(0.6 + k * 3.2);
-      (ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
-      if (k < 1) requestAnimationFrame(step);
-      else ring.visible = false;
-    };
-    step();
-  }
-
   private async animateKnock(pid: PlayerId, finalView: GameView, fast: boolean) {
     const g = this.pieces.get(pid);
     if (!g) return;
-    this.flashAt(g.position);
     // topple
     const start = performance.now();
     const ms = fast ? 120 : 350;

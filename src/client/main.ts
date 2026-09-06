@@ -43,8 +43,6 @@ function showMenu() {
   uiRoot.innerHTML = '';
   app.overview();
   board.clearChoices();
-  app.controls.autoRotate = true;
-  app.controls.autoRotateSpeed = 0.5;
   const ov = overlay(`
     <h1>FIRE ISLE</h1>
     <p>The dimensional adventure of pitfalls and perils. Capture the jewel of Vul-Kar, dodge the fireballs, and be first to the Dock.</p>
@@ -268,7 +266,6 @@ function showLobby(net: NetSession) {
 function attachSession(s: Session) {
   session?.leave();
   session = s;
-  app.controls.autoRotate = false;
   uiRoot.innerHTML = '';
   ui = new GameUI({
     root: uiRoot,

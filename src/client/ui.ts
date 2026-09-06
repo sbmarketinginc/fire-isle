@@ -27,20 +27,6 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
 
-/** Small drawn icons for the card faces. */
-const CARD_ART: Record<string, string> = {
-  FIREBALL: '<svg viewBox="0 0 48 32"><path d="M8 22c6-2 9-9 20-10-3 3-4 6-2 8 4-2 9-1 12 4-6-1-12 2-15 5-6 1-12-1-15-7z" fill="#ffb14a"/><circle cx="34" cy="20" r="7" fill="#e8412a"/><circle cx="32" cy="18" r="2.5" fill="#ffe6a0"/></svg>',
-  FAKE_JEWEL: '<svg viewBox="0 0 48 32"><path d="M14 8h20l8 8-18 14L6 16z" fill="#ff5a6a" stroke="#7a1020" stroke-width="1.5"/><path d="M14 8l10 22 10-22M6 16h36" stroke="#7a1020" stroke-width="1.2" fill="none"/><path d="M22 3l4 6-3 4" stroke="#fff" stroke-width="2" fill="none"/></svg>',
-  CANCEL: '<svg viewBox="0 0 48 32"><circle cx="24" cy="16" r="12" fill="none" stroke="#b8341c" stroke-width="4"/><path d="M15 7l18 18" stroke="#b8341c" stroke-width="4"/></svg>',
-  TALISMAN: '<svg viewBox="0 0 48 32"><path d="M24 2v6" stroke="#8a5a2b" stroke-width="2"/><circle cx="24" cy="18" r="11" fill="#ffd54a" stroke="#8a5a2b" stroke-width="2"/><path d="M24 10l2.5 5.5 6 .6-4.5 4 1.4 6-5.4-3.2-5.4 3.2 1.4-6-4.5-4 6-.6z" fill="#b8341c"/></svg>',
-  REROLL: '<svg viewBox="0 0 48 32"><rect x="14" y="6" width="20" height="20" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="19" cy="11" r="2"/><circle cx="29" cy="21" r="2"/><circle cx="24" cy="16" r="2"/><path d="M6 16a18 18 0 0 1 6-11M42 16a18 18 0 0 1-6 11" stroke="#b8341c" stroke-width="2.5" fill="none"/></svg>',
-  EXTRA_TURN: '<svg viewBox="0 0 48 32"><path d="M32 8a12 12 0 1 0 4 9" fill="none" stroke="#b8341c" stroke-width="4"/><path d="M30 3l6 6-8 3z" fill="#b8341c"/></svg>',
-  TAKE_CARD: '<svg viewBox="0 0 48 32"><rect x="8" y="6" width="14" height="20" rx="2" fill="#fff" stroke="#333" stroke-width="1.5" transform="rotate(-10 15 16)"/><rect x="22" y="6" width="14" height="20" rx="2" fill="#ffe6a0" stroke="#333" stroke-width="1.5" transform="rotate(8 29 16)"/><path d="M40 16l-8 0M36 12l4 4-4 4" stroke="#b8341c" stroke-width="2.5" fill="none"/></svg>',
-  MOVE_AHEAD: '<svg viewBox="0 0 48 32"><path d="M10 6l10 10-10 10M26 6l10 10-10 10" fill="none" stroke="#2f7a3a" stroke-width="4" stroke-linejoin="round"/></svg>',
-  MOVE_BACK: '<svg viewBox="0 0 48 32"><path d="M38 6L28 16l10 10M22 6L12 16l10 10" fill="none" stroke="#b8341c" stroke-width="4" stroke-linejoin="round"/></svg>',
-  DOUBLE: '<svg viewBox="0 0 48 32"><rect x="4" y="6" width="18" height="18" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="9" cy="11" r="2"/><circle cx="17" cy="19" r="2"/><text x="26" y="24" font-size="20" font-weight="800" fill="#b8341c" font-family="Helvetica, Arial">×2</text></svg>',
-};
-
 export function describeLoc(view: GameView, pid: PlayerId): string {
   const loc = view.players[pid].loc;
   if (loc.kind === 'space') {
@@ -450,7 +436,7 @@ export class GameUI {
       for (const c of view.myHand) {
         const playable = !!e && e.cards.includes(c.uid) && !this.busy;
         const card = el('div', `card${playable ? ' playable' : ' dim'}`);
-        card.append(el('div', 'art', CARD_ART[c.type] ?? ''));
+        card.append(el('div', 'art'));
         card.append(el('div', '', esc(cardTitle(c))));
         card.onclick = () => this.cardTapped(view, c, playable);
         hand.append(card);

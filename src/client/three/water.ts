@@ -60,9 +60,6 @@ const frag = /* glsl */ `
     foam += smoothstep(0.55, 0.62, shore + vWave * 4.0) * 0.25 * foamNoise;
     col = mix(col, vec3(0.95, 0.98, 1.0), clamp(foam, 0.0, 1.0) * 0.9);
     col += vec3(1.0, 0.95, 0.85) * spec * 0.9 + vec3(0.55, 0.7, 1.0) * fresnel * 0.25;
-    // flickering sun glints on the wave crests
-    float sparkle = noise(vWorld.xz * 14.0 + vec2(uTime * 1.3, -uTime * 0.9)) * noise(vWorld.xz * 9.0 - uTime * 0.7);
-    col += vec3(1.0, 0.97, 0.9) * smoothstep(0.42, 0.55, sparkle) * (0.35 + 0.65 * spec) * 0.8;
     float alpha = mix(0.86, 0.6, depthT) + foam * 0.3;
     // fade out where the plane would poke through the beach so the sand shows
     alpha *= 1.0 - smoothstep(0.96, 1.0, shore);
